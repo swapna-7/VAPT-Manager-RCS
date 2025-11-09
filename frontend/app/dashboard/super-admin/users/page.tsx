@@ -25,24 +25,30 @@ export default async function UserManagementPage() {
 
   // Fetch all profiles from the profiles table
   // Try with suspended first, fallback if column doesn't exist
-  let { data: profiles, error } = await supabase
+  let { data: profilesRaw, error } = await supabase
     .from("profiles")
-    .select("id, full_name, role, status, suspended, created_at, organization_id")
+    .select("id, full_name, role, status, suspended, created_at, organization_id, organizations(name)")
     .order("created_at", { ascending: false });
 
   // If suspended column doesn't exist, fetch without it
   if (error && error.message?.includes("suspended")) {
     const { data, error: fallbackError } = await supabase
       .from("profiles")
-      .select("id, full_name, role, status, created_at, organization_id")
+      .select("id, full_name, role, status, created_at, organization_id, organizations(name)")
       .order("created_at", { ascending: false });
     
     if (!fallbackError) {
       // Add suspended: false to all profiles
-      profiles = data?.map(p => ({ ...p, suspended: false })) || [];
+      profilesRaw = data?.map(p => ({ ...p, suspended: false })) || [];
       error = null;
     }
   }
+
+  // Transform organizations from array to single object
+  const profiles = profilesRaw?.map((profile: any) => ({
+    ...profile,
+    organizations: Array.isArray(profile.organizations) ? profile.organizations[0] : profile.organizations
+  })) || [];
 
   // Log for debugging
   if (error) {
