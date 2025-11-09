@@ -94,7 +94,7 @@ export function LoginForm({
                 router.push("/dashboard/admin");
                 return;
               case "Security-team":
-                router.push("/dashboard/security");
+                router.push("/dashboard/security-team");
                 return;
               default:
                 router.push("/dashboard/client");
@@ -132,7 +132,7 @@ export function LoginForm({
           router.push("/dashboard/admin");
           break;
         case "Security-team":
-          router.push("/dashboard/security");
+          router.push("/dashboard/security-team");
           break;
         case "Client":
         default:

@@ -16,7 +16,6 @@ interface Profile {
   suspended: boolean;
   created_at: string;
   organization_id: string | null;
-  organizations?: { name: string } | null;
 }
 
 interface UserManagementTableProps {

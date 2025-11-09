@@ -10,8 +10,7 @@ import {
   Building2, 
   Bell,
   Shield,
-  CircleCheckBig,
-  UserLock,
+  FileText,
   LogOut
 } from "lucide-react";
 
@@ -42,12 +41,10 @@ export default function DashboardLayout({
   };
 
   const navItems = [
-    { href: "/dashboard/admin", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/dashboard/admin/users", label: "User Management", icon: Users },
-    { href: "/dashboard/admin/organizations", label: "Organizations", icon: Building2 },
-    { href: "/dashboard/admin/security-teams", label: "Security Teams", icon: Shield },
-    { href: "/dashboard/admin/vulnerabilities", label: "Vulnerabilities", icon: CircleCheckBig },
-    { href: "/dashboard/admin/notifications", label: "Notifications", icon: Bell },
+    { href: "/dashboard/security-team", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/dashboard/security-team/organizations", label: "My Organizations", icon: Building2 },
+    { href: "/dashboard/security-team/submissions", label: "Submissions", icon: FileText },
+    { href: "/dashboard/security-team/notifications", label: "Notifications", icon: Bell },
   ];
 
   return (
@@ -60,7 +57,7 @@ export default function DashboardLayout({
               <Shield className="h-6 w-6 text-purple-600" />
               <div>
                 <h1 className="font-bold text-lg text-gray-900">VAPT Manager</h1>
-                <p className="text-sm text-purple-600">Admin</p>
+                <p className="text-sm text-purple-600">Security Team</p>
               </div>
             </div>
           </div>
