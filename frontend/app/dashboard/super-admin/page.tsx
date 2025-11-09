@@ -2,9 +2,56 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Clock, Building2, Shield, CheckCircle2, UserPlus } from "lucide-react";
 import Link from "next/link";
+import { formatDateTime } from "@/lib/utils";
 
 export default async function SuperAdminDashboard() {
   const supabase = await createClient();
+
+  // Verify user is authenticated and get their role
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  
+  if (authError || !user) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Super Admin Dashboard</h1>
+        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-red-500">Please log in to access this page.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Verify user is a super-admin
+  const { data: userProfile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!userProfile || userProfile.role !== "Super-admin") {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Super Admin Dashboard</h1>
+        </div>
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardContent className="pt-6">
+            <p className="text-yellow-800 font-semibold mb-2">Access Denied</p>
+            <p className="text-sm text-yellow-700">
+              You need Super-admin role to access this page. Your current role: {userProfile?.role || "Unknown"}
+            </p>
+            <p className="text-xs text-yellow-600 mt-2">
+              User ID: {user.id}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Fetch all data
   const [profilesResult, organizationsResult, notificationsResult] = await Promise.all([
@@ -22,6 +69,17 @@ export default async function SuperAdminDashboard() {
       .order("created_at", { ascending: false })
       .limit(10),
   ]);
+
+  // Log errors for debugging
+  if (profilesResult.error) {
+    console.error("Error fetching profiles:", profilesResult.error);
+  }
+  if (organizationsResult.error) {
+    console.error("Error fetching organizations:", organizationsResult.error);
+  }
+  if (notificationsResult.error) {
+    console.error("Error fetching notifications:", notificationsResult.error);
+  }
 
   const profiles = profilesResult.data || [];
   const organizations = organizationsResult.data || [];
@@ -90,6 +148,27 @@ export default async function SuperAdminDashboard() {
         </Card>
       </div>
 
+      {/* Error Messages */}
+      {(organizationsResult.error || notificationsResult.error) && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            {organizationsResult.error && (
+              <p className="text-sm text-red-600 mb-2">
+                Error loading organizations: {organizationsResult.error.message}
+              </p>
+            )}
+            {notificationsResult.error && (
+              <p className="text-sm text-red-600">
+                Error loading notifications: {notificationsResult.error.message}
+              </p>
+            )}
+            <p className="text-xs text-red-500 mt-2">
+              This might be due to RLS policies. Make sure your account has the "Super-admin" role.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Activity */}
         <Card>
@@ -120,7 +199,7 @@ export default async function SuperAdminDashboard() {
                     message = activity.type;
                   }
 
-                  const timeAgo = new Date(activity.created_at).toLocaleString();
+                  const timeAgo = formatDateTime(activity.created_at);
 
                   return (
                     <div key={activity.id} className="flex items-start gap-3">

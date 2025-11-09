@@ -1,6 +1,6 @@
-import DashboardLayout from "@/components/dashboard-superadmin";
+import DashboardLayout from "@/components/dashboard-admin";
 
-export default function SuperAdminLayout({
+export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;

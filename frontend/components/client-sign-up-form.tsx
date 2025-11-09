@@ -33,8 +33,8 @@ export function ClientSignUpForm({
   const [address, setAddress] = useState("");
   const [allowedEmails, setAllowedEmails] = useState("");
   const [services, setServices] = useState<ServicesState>({});
-  const [adminEmail, setAdminEmail] = useState("");
-  const [adminPassword, setAdminPassword] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -51,22 +51,35 @@ export function ClientSignUpForm({
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+
+    // Validate password confirmation
+    if (password !== passwordConfirm) {
+      setError("Passwords do not match");
+      setIsLoading(false);
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      setIsLoading(false);
+      return;
+    }
+
+    // Validate that at least one email is provided
+    const emailList = allowedEmails
+      ? allowedEmails.split(",").map((s) => s.trim()).filter((email) => email.length > 0)
+      : [];
+
+    if (emailList.length === 0) {
+      setError("Please provide at least one email address to grant access");
+      setIsLoading(false);
+      return;
+    }
+
     const supabase = createClient();
 
     try {
-      // Create auth user for the primary admin contact
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: adminEmail,
-        password: adminPassword,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/sign-up-success`,
-        },
-      });
-      if (signUpError) throw signUpError;
-
-      const userId = signUpData?.user?.id;
-
-      // Insert organization
+      // Insert organization (will be pending approval)
       const { data: orgData, error: orgError } = await supabase
         .from("organizations")
         .insert([
@@ -88,55 +101,43 @@ export function ClientSignUpForm({
 
       const organizationId = orgData?.id;
 
-      // Wait for trigger to complete, then upsert profile with organization details
-      if (userId) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .upsert({
-            id: userId,
-            role: "Client",
+      // Create notifications for super admin approval
+      const notifications = [
+        {
+          type: "organization_signup",
+          actor_id: null, // No user created yet
+          payload: { 
+            name: orgName, 
             organization_id: organizationId,
-            allowed_emails: allowedEmails ? allowedEmails.split(",").map((s) => s.trim()) : null,
-            status: "pending",
-          }, { onConflict: "id" });
-        
-        if (profileError) {
-          console.error("profile upsert error", profileError.message);
-          throw new Error("Database error saving new user");
-        }
-
-        // create notifications for admin approval
-        const notifications = [
-          {
-            type: "user_signup",
-            actor_id: userId,
-            payload: { email: adminEmail, role: "Client", organization_id: organizationId },
+            contact_email: contactEmail,
+            contact_phone: contactPhone,
+            address,
+            services: {
+              web: services.web || null,
+              android: services.android || null,
+              ios: services.ios || null,
+            }
           },
-          {
-            type: "organization_signup",
-            actor_id: userId,
-            payload: { 
-              name: orgName, 
-              organization_id: organizationId,
-              contact_email: contactEmail,
-              contact_phone: contactPhone,
-              address,
-              services: {
-                web: services.web || null,
-                android: services.android || null,
-                ios: services.ios || null,
-              }
-            },
-          },
-        ];
-        
-        const { error: notifError } = await supabase.from("notifications").insert(notifications);
-        if (notifError) console.error("notification insert error", notifError.message);
+        },
+        {
+          type: "email_access_request",
+          actor_id: null,
+          payload: {
+            organization_id: organizationId,
+            emails: emailList,
+            password: password, // Store password for super admin to use when creating accounts
+            requested_by: contactEmail,
+          } as any, // Type assertion needed for notification payload
+        },
+      ];
+      
+      const { error: notifError } = await supabase.from("notifications").insert(notifications);
+      if (notifError) {
+        console.error("notification insert error", notifError.message);
+        throw new Error("Failed to create approval requests");
       }
 
-      // Redirect to signup success (email confirmation may be required)
+      // Redirect to signup success
       router.push("/auth/sign-up-success");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
@@ -175,58 +176,133 @@ export function ClientSignUpForm({
             </div>
 
             <div className="grid gap-2">
-              <Label>Services required</Label>
-              <div className="flex flex-col gap-2">
+              <Label>Services required (Select multiple)</Label>
+              <div className="flex flex-col gap-3 p-3 border rounded-lg">
                 <div className="flex items-center gap-2">
-                  <Checkbox checked={!!services.web} onChange={() => toggleService("web")} />
-                  <span>Web Application PT</span>
+                  <Checkbox 
+                    checked={!!services.web} 
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setServices((s) => ({ ...s, web: "Standard" }));
+                      } else {
+                        setServices((s) => ({ ...s, web: null }));
+                      }
+                    }} 
+                  />
+                  <span className="flex-1">Web Application PT</span>
                   {services.web && (
-                    <div className="ml-auto flex gap-2">
-                      <button type="button" onClick={() => setServiceTier("web", "Standard")} className="btn">Standard</button>
-                      <button type="button" onClick={() => setServiceTier("web", "Essential")} className="btn">Essential</button>
+                    <div className="flex gap-2">
+                      <button 
+                        type="button" 
+                        onClick={() => setServiceTier("web", "Standard")} 
+                        className={`px-3 py-1 text-xs rounded ${services.web === "Standard" ? "bg-purple-600 text-white" : "bg-gray-200"}`}
+                      >
+                        Standard
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => setServiceTier("web", "Essential")} 
+                        className={`px-3 py-1 text-xs rounded ${services.web === "Essential" ? "bg-purple-600 text-white" : "bg-gray-200"}`}
+                      >
+                        Essential
+                      </button>
                     </div>
                   )}
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <Checkbox checked={!!services.android} onChange={() => toggleService("android")} />
-                  <span>Android Application PT</span>
+                  <Checkbox 
+                    checked={!!services.android} 
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setServices((s) => ({ ...s, android: "Standard" }));
+                      } else {
+                        setServices((s) => ({ ...s, android: null }));
+                      }
+                    }} 
+                  />
+                  <span className="flex-1">Android Application PT</span>
                   {services.android && (
-                    <div className="ml-auto flex gap-2">
-                      <button type="button" onClick={() => setServiceTier("android", "Standard")} className="btn">Standard</button>
-                      <button type="button" onClick={() => setServiceTier("android", "Essential")} className="btn">Essential</button>
+                    <div className="flex gap-2">
+                      <button 
+                        type="button" 
+                        onClick={() => setServiceTier("android", "Standard")} 
+                        className={`px-3 py-1 text-xs rounded ${services.android === "Standard" ? "bg-purple-600 text-white" : "bg-gray-200"}`}
+                      >
+                        Standard
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => setServiceTier("android", "Essential")} 
+                        className={`px-3 py-1 text-xs rounded ${services.android === "Essential" ? "bg-purple-600 text-white" : "bg-gray-200"}`}
+                      >
+                        Essential
+                      </button>
                     </div>
                   )}
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <Checkbox checked={!!services.ios} onChange={() => toggleService("ios")} />
-                  <span>iOS Application PT</span>
+                  <Checkbox 
+                    checked={!!services.ios} 
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setServices((s) => ({ ...s, ios: "Standard" }));
+                      } else {
+                        setServices((s) => ({ ...s, ios: null }));
+                      }
+                    }} 
+                  />
+                  <span className="flex-1">iOS Application PT</span>
                   {services.ios && (
-                    <div className="ml-auto flex gap-2">
-                      <button type="button" onClick={() => setServiceTier("ios", "Standard")} className="btn">Standard</button>
-                      <button type="button" onClick={() => setServiceTier("ios", "Essential")} className="btn">Essential</button>
+                    <div className="flex gap-2">
+                      <button 
+                        type="button" 
+                        onClick={() => setServiceTier("ios", "Standard")} 
+                        className={`px-3 py-1 text-xs rounded ${services.ios === "Standard" ? "bg-purple-600 text-white" : "bg-gray-200"}`}
+                      >
+                        Standard
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => setServiceTier("ios", "Essential")} 
+                        className={`px-3 py-1 text-xs rounded ${services.ios === "Essential" ? "bg-purple-600 text-white" : "bg-gray-200"}`}
+                      >
+                        Essential
+                      </button>
                     </div>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="allowed-emails">Emails to be granted access (comma separated)</Label>
-              <Input id="allowed-emails" value={allowedEmails} onChange={(e) => setAllowedEmails(e.target.value)} />
-            </div>
-
             <hr />
-
             <div className="grid gap-2">
-              <Label htmlFor="admin-email">Admin contact email (will be created)</Label>
-              <Input id="admin-email" type="email" required value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} />
+              <Label htmlFor="allowed-emails">Emails to be granted access (comma separated) *</Label>
+              <Input 
+                id="allowed-emails" 
+                type="text"
+                placeholder="user1@example.com, user2@example.com"
+                required
+                value={allowedEmails} 
+                onChange={(e) => setAllowedEmails(e.target.value)} 
+              />
+              <p className="text-xs text-gray-500">
+                These emails will be sent for approval to the super admin. Once approved, accounts will be created with the password you provide below.
+              </p>
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="admin-password">Password</Label>
-              <Input id="admin-password" type="password" required value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} />
+              <Label htmlFor="password">Password for all accounts *</Label>
+              <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+              <p className="text-xs text-gray-500">
+                This password will be used for all approved email accounts.
+              </p>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="password-confirm">Confirm Password *</Label>
+              <Input id="password-confirm" type="password" required value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)} />
             </div>
 
             {error && <p className="text-sm text-red-500">{error}</p>}

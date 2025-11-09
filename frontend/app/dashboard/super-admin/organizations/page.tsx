@@ -2,14 +2,41 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { Building2, ArrowRight } from "lucide-react";
+import { formatDate } from "@/lib/utils";
 
 export default async function OrganizationsPage() {
   const supabase = await createClient();
+
+  // Verify user is authenticated
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  
+  if (authError || !user) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Organizations</h1>
+        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-red-500">Please log in to access this page.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const { data: organizations, error } = await supabase
     .from("organizations")
     .select("id, name, contact_email, contact_phone, address, created_at")
     .order("created_at", { ascending: false });
+
+  // Log for debugging
+  if (error) {
+    console.error("Error fetching organizations:", error);
+    console.error("User ID:", user.id);
+  } else {
+    console.log(`Successfully fetched ${organizations?.length || 0} organizations`);
+  }
 
   return (
     <div className="space-y-6">
@@ -46,7 +73,7 @@ export default async function OrganizationsPage() {
                       <h3 className="font-semibold text-gray-900">{org.name}</h3>
                       <p className="text-sm text-gray-500">{org.contact_email || "No email"}</p>
                       <p className="text-xs text-gray-400 mt-1">
-                        Created: {new Date(org.created_at).toLocaleDateString()}
+                        Created: {formatDate(org.created_at)}
                       </p>
                     </div>
                   </div>
@@ -60,4 +87,5 @@ export default async function OrganizationsPage() {
     </div>
   );
 }
+
 

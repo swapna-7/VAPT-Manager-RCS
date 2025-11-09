@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { CheckCircle2, UserPlus, Building2, Clock } from "lucide-react";
+import { formatDateTime } from "@/lib/utils";
 
 interface OrganizationActivityProps {
   organizationId: string;
@@ -77,7 +78,7 @@ export default function OrganizationActivity({ organizationId }: OrganizationAct
             <div className="flex-1">
               <p className="text-sm text-gray-900">{message}</p>
               <p className="text-xs text-gray-500">
-                {new Date(activity.created_at).toLocaleString()}
+                {formatDateTime(activity.created_at)}
               </p>
             </div>
           </div>
@@ -86,4 +87,5 @@ export default function OrganizationActivity({ organizationId }: OrganizationAct
     </div>
   );
 }
+
 

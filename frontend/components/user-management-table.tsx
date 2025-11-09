@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CheckCircle2, X, Ban, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { formatDate } from "@/lib/utils";
 
 interface Profile {
   id: string;
@@ -30,6 +31,49 @@ export default function UserManagementTable({ profiles: initialProfiles }: UserM
   const [roleFilter, setRoleFilter] = useState("all");
   const [userEmails, setUserEmails] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const [fetchingData, setFetchingData] = useState(false);
+
+  // Client-side fallback: fetch profiles if initialProfiles is empty
+  useEffect(() => {
+    if (initialProfiles.length === 0 && !fetchingData) {
+      setFetchingData(true);
+      const fetchProfiles = async () => {
+        try {
+          const supabase = createClient();
+          let { data, error } = await supabase
+            .from("profiles")
+            .select("id, full_name, role, status, suspended, created_at, organization_id")
+            .order("created_at", { ascending: false });
+          
+          // If suspended column doesn't exist, fetch without it
+          if (error && error.message?.includes("suspended")) {
+            const { data: fallbackData, error: fallbackError } = await supabase
+              .from("profiles")
+              .select("id, full_name, role, status, created_at, organization_id")
+              .order("created_at", { ascending: false });
+            
+            if (!fallbackError && fallbackData) {
+              // Add suspended: false to all profiles
+              data = fallbackData.map(p => ({ ...p, suspended: false }));
+              error = null;
+            }
+          }
+          
+          if (error) {
+            console.error("Client-side fetch error:", error);
+          } else if (data && data.length > 0) {
+            setProfiles(data);
+            setFilteredProfiles(data);
+          }
+        } catch (e) {
+          console.error("Failed to fetch profiles client-side:", e);
+        } finally {
+          setFetchingData(false);
+        }
+      };
+      fetchProfiles();
+    }
+  }, [initialProfiles.length, fetchingData]);
 
   // Fetch user emails
   useEffect(() => {
@@ -265,7 +309,7 @@ export default function UserManagementTable({ profiles: initialProfiles }: UserM
                     </Badge>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(profile.created_at).toLocaleDateString()}
+                    {formatDate(profile.created_at)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-2">
@@ -314,4 +358,5 @@ export default function UserManagementTable({ profiles: initialProfiles }: UserM
     </div>
   );
 }
+
 

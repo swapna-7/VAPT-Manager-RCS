@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, Building2, Mail, Phone, MapPin, Calendar, Clock } from "lucide-react";
 import OrganizationNotes from "@/components/organization-notes";
 import OrganizationActivity from "@/components/organization-activity";
+import { formatDateTime } from "@/lib/utils";
 
 export default async function OrganizationDetailPage({
   params,
@@ -96,7 +97,7 @@ export default async function OrganizationDetailPage({
               <div>
                 <p className="text-xs text-gray-500">Created</p>
                 <p className="text-sm font-medium">
-                  {new Date(organization.created_at).toLocaleString()}
+                  {formatDateTime(organization.created_at)}
                 </p>
               </div>
             </div>
@@ -111,7 +112,7 @@ export default async function OrganizationDetailPage({
                 <p className="text-xs text-gray-500">Last Updated</p>
                 <p className="text-sm font-medium">
                   {organization.updated_at
-                    ? new Date(organization.updated_at).toLocaleString()
+                    ? formatDateTime(organization.updated_at)
                     : "Never"}
                 </p>
               </div>
@@ -190,4 +191,5 @@ export default async function OrganizationDetailPage({
     </div>
   );
 }
+
 
