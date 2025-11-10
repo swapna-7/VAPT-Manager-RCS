@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { FileText, ArrowLeft, Loader2, Building2, User, Calendar, CheckCircle, XCircle, MessageSquare, Users } from "lucide-react";
+import { FileText, ArrowLeft, Loader2, Building2, User, Calendar, CheckCircle, XCircle, MessageSquare, Users, Clock } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import Link from "next/link";
 
 interface Vulnerability {
@@ -27,6 +28,7 @@ interface Vulnerability {
   approved_by: string | null;
   organization_id: string;
   assigned_to_client: string | null;
+  submitted_by: string;
   organizations: {
     name: string;
     contact_email: string | null;
@@ -53,6 +55,7 @@ export default function AdminVulnerabilityDetailPage({ params }: { params: Promi
   const [showClientModal, setShowClientModal] = useState(false);
   const [clientUsers, setClientUsers] = useState<ClientUser[]>([]);
   const [selectedClient, setSelectedClient] = useState("");
+  const [clientDeadline, setClientDeadline] = useState("");
   const [loadingClients, setLoadingClients] = useState(false);
 
   useEffect(() => {
@@ -178,7 +181,8 @@ export default function AdminVulnerabilityDetailPage({ params }: { params: Promi
           approved_by: currentUser.id,
           approved_at: new Date().toISOString(),
           assigned_to_client: selectedClient,
-          client_status: "open"
+          client_status: "open",
+          client_deadline: clientDeadline ? new Date(clientDeadline).toISOString() : null
         })
         .eq("id", unwrappedParams.id);
 
@@ -186,6 +190,44 @@ export default function AdminVulnerabilityDetailPage({ params }: { params: Promi
         console.error("Error approving vulnerability:", error);
         alert("Failed to approve: " + error.message);
         return;
+      }
+
+      // Create notification for security team member (who submitted it)
+      const { error: securityNotifError } = await supabase
+        .from("notifications")
+        .insert({
+          type: "vulnerability_approved",
+          user_id: vulnerability.submitted_by,
+          actor_id: currentUser.id,
+          payload: {
+            vulnerability_id: vulnerability.id,
+            vulnerability_title: vulnerability.title,
+            admin_comments: adminComments.trim() || null,
+          },
+        });
+
+      if (securityNotifError) {
+        console.error("Error creating security team notification:", securityNotifError);
+      }
+
+      // Create notification for client user
+      const { error: clientNotifError } = await supabase
+        .from("notifications")
+        .insert({
+          type: "vulnerability_assigned",
+          user_id: selectedClient,
+          actor_id: currentUser.id,
+          payload: {
+            vulnerability_id: vulnerability.id,
+            vulnerability_title: vulnerability.title,
+            description: vulnerability.description,
+            severity: vulnerability.severity,
+            client_deadline: clientDeadline ? new Date(clientDeadline).toISOString() : null,
+          },
+        });
+
+      if (clientNotifError) {
+        console.error("Error creating client notification:", clientNotifError);
       }
 
       alert("Vulnerability approved and assigned successfully!");
@@ -485,11 +527,12 @@ export default function AdminVulnerabilityDetailPage({ params }: { params: Promi
 
           {!isPending && (
             <div className="pt-4 border-t">
-              <p className="text-sm text-gray-600 mb-2">
-                Status: <Badge className={getStatusColor(vulnerability.status)}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm text-gray-600">Status:</span>
+                <Badge className={getStatusColor(vulnerability.status)}>
                   {vulnerability.status.charAt(0).toUpperCase() + vulnerability.status.slice(1)}
                 </Badge>
-              </p>
+              </div>
               {vulnerability.approved_at && (
                 <p className="text-sm text-gray-600">
                   Reviewed on: {new Date(vulnerability.approved_at).toLocaleDateString()} at{" "}
@@ -547,6 +590,23 @@ export default function AdminVulnerabilityDetailPage({ params }: { params: Promi
                     </select>
                   </div>
 
+                  <div className="space-y-2">
+                    <Label htmlFor="client-deadline" className="flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Remediation Deadline (Optional)
+                    </Label>
+                    <Input
+                      id="client-deadline"
+                      type="datetime-local"
+                      value={clientDeadline}
+                      onChange={(e) => setClientDeadline(e.target.value)}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-gray-500">
+                      Set a deadline for the client to remediate this vulnerability
+                    </p>
+                  </div>
+
                   <div className="flex gap-3 pt-4">
                     <Button
                       onClick={handleConfirmApproval}
@@ -569,6 +629,7 @@ export default function AdminVulnerabilityDetailPage({ params }: { params: Promi
                       onClick={() => {
                         setShowClientModal(false);
                         setSelectedClient("");
+                        setClientDeadline("");
                       }}
                       disabled={processing}
                       variant="outline"

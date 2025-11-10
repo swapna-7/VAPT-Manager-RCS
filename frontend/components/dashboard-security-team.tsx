@@ -11,6 +11,7 @@ import {
   Bell,
   Shield,
   FileText,
+  UserLock,
   LogOut
 } from "lucide-react";
 
@@ -44,6 +45,7 @@ export default function DashboardLayout({
     { href: "/dashboard/security-team", label: "Dashboard", icon: LayoutDashboard },
     { href: "/dashboard/security-team/organizations", label: "My Organizations", icon: Building2 },
     { href: "/dashboard/security-team/submissions", label: "Submissions", icon: FileText },
+    { href: "/dashboard/security-team/verifications", label: "Verification Queue", icon: UserLock },
     { href: "/dashboard/security-team/notifications", label: "Notifications", icon: Bell },
   ];
 

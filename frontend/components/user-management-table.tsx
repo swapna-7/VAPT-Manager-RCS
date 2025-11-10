@@ -16,6 +16,10 @@ interface Profile {
   suspended: boolean;
   created_at: string;
   organization_id: string | null;
+  organizations?: {
+    id: string;
+    name: string;
+  }[] | null;
 }
 
 interface UserManagementTableProps {
@@ -61,6 +65,31 @@ export default function UserManagementTable({ profiles: initialProfiles }: UserM
           if (error) {
             console.error("Client-side fetch error:", error);
           } else if (data && data.length > 0) {
+            // Fetch organizations separately
+            const orgIds = data
+              .filter(p => p.organization_id)
+              .map(p => p.organization_id);
+            
+            if (orgIds.length > 0) {
+              const { data: organizations } = await supabase
+                .from("organizations")
+                .select("id, name")
+                .in("id", orgIds);
+              
+              if (organizations) {
+                // Create a map for quick lookup
+                const orgMap = new Map(organizations.map(org => [org.id, org]));
+                
+                // Attach organization data to profiles
+                data = data.map(profile => ({
+                  ...profile,
+                  organizations: profile.organization_id && orgMap.has(profile.organization_id)
+                    ? [orgMap.get(profile.organization_id)!]
+                    : null
+                }));
+              }
+            }
+            
             setProfiles(data);
             setFilteredProfiles(data);
           }
@@ -291,6 +320,11 @@ export default function UserManagementTable({ profiles: initialProfiles }: UserM
                         <div className="text-sm text-gray-500">
                           {userEmails[profile.id] || "Loading..."}
                         </div>
+                        {profile.role === "Client" && profile.organizations && profile.organizations.length > 0 && (
+                          <div className="text-xs text-gray-400 mt-0.5">
+                            {profile.organizations[0].name}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>

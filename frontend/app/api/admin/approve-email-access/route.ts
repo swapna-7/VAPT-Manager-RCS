@@ -39,20 +39,30 @@ export async function POST(req: Request) {
     }
 
     const payload = notification.payload as any;
-    const { organization_id, emails, password } = payload;
+    const { organization_id, users, emails, password } = payload;
 
-    if (!organization_id || !emails || !Array.isArray(emails) || emails.length === 0 || !password) {
+    // Support both old format (emails array) and new format (users array with name and email)
+    const userList = users && Array.isArray(users) 
+      ? users 
+      : emails && Array.isArray(emails)
+      ? emails.map((email: string) => ({ name: email.split('@')[0], email }))
+      : [];
+
+    if (!organization_id || userList.length === 0 || !password) {
       return NextResponse.json(
-        { error: "Invalid notification payload: missing organization_id, emails, or password" },
+        { error: "Invalid notification payload: missing organization_id, users/emails, or password" },
         { status: 400 }
       );
     }
 
-    // Create user accounts for each email
+    // Create user accounts for each user
     const createdUsers: string[] = [];
     const errors: string[] = [];
 
-    for (const email of emails) {
+    for (const user of userList) {
+      const email = typeof user === 'string' ? user : user.email;
+      const fullName = typeof user === 'string' ? email.split('@')[0] : user.name;
+      
       try {
         // Create auth user
         const { data: authData, error: authError } = await supabase.auth.admin.createUser({
@@ -76,10 +86,11 @@ export async function POST(req: Request) {
         // Wait for trigger to create profile
         await new Promise((resolve) => setTimeout(resolve, 500));
 
-        // Update profile with organization details
+        // Update profile with organization details and full name
         const { error: profileError } = await supabase
           .from("profiles")
           .update({
+            full_name: fullName.trim(),
             role: "Client",
             organization_id: organization_id,
             status: "approved", // Auto-approve since super admin approved

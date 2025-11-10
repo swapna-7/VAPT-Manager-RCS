@@ -1,0 +1,5 @@
+# Ignore all SQL files
+*.sql
+
+# Ignore all Markdown files
+*.md

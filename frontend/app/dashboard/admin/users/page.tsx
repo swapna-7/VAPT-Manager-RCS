@@ -44,6 +44,33 @@ export default async function UserManagementPage() {
     }
   }
 
+  // Fetch organizations separately and attach to profiles
+  if (profiles && profiles.length > 0) {
+    const orgIds = profiles
+      .filter(p => p.organization_id)
+      .map(p => p.organization_id);
+    
+    if (orgIds.length > 0) {
+      const { data: organizations } = await supabase
+        .from("organizations")
+        .select("id, name")
+        .in("id", orgIds);
+      
+      if (organizations) {
+        // Create a map for quick lookup
+        const orgMap = new Map(organizations.map(org => [org.id, org]));
+        
+        // Attach organization data to profiles
+        profiles = profiles.map(profile => ({
+          ...profile,
+          organizations: profile.organization_id && orgMap.has(profile.organization_id)
+            ? [orgMap.get(profile.organization_id)!]
+            : null
+        }));
+      }
+    }
+  }
+
   // Log for debugging
   if (error) {
     console.error("Error fetching profiles:", error);

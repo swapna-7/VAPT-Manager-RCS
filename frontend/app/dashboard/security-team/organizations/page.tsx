@@ -28,13 +28,14 @@ export default async function SecurityTeamOrganizationsPage() {
     redirect("/auth/login");
   }
 
-  // Fetch assigned organizations
+  // Fetch assigned organizations with their assigned services
   const { data: assignments, error: assignmentsError } = await supabase
     .from("security_team_organizations")
     .select(`
       id,
       organization_id,
       assigned_at,
+      services,
       organizations!inner (
         id,
         name,
@@ -53,14 +54,19 @@ export default async function SecurityTeamOrganizationsPage() {
     console.error("Error fetching assignments:", assignmentsError);
   }
 
-  // Transform the data
+  // Transform the data and include only assigned services
   const organizations = assignments?.map((assignment: any) => {
     const org = Array.isArray(assignment.organizations) 
       ? assignment.organizations[0] 
       : assignment.organizations;
+    
+    // Get assigned services from the assignment
+    const assignedServices = assignment.services || {};
+    
     return {
       ...org,
-      assigned_at: assignment.assigned_at
+      assigned_at: assignment.assigned_at,
+      assigned_services: assignedServices // Store which services are assigned
     };
   }) || [];
 
@@ -161,17 +167,28 @@ export default async function SecurityTeamOrganizationsPage() {
                       <span className="line-clamp-2">{org.address}</span>
                     </div>
                   )}
-                  {org.services && Array.isArray(org.services) && org.services.length > 0 && (
+                  
+                  {/* Display only assigned services */}
+                  {org.assigned_services && (
                     <div className="flex flex-wrap gap-1 mt-2">
-                      {org.services.slice(0, 3).map((service: string, index: number) => (
-                        <Badge key={index} variant="outline" className="text-xs">
-                          {service}
-                        </Badge>
-                      ))}
-                      {org.services.length > 3 && (
+                      <p className="text-xs text-gray-500 w-full mb-1">Assigned Services:</p>
+                      {org.assigned_services.web && (
                         <Badge variant="outline" className="text-xs">
-                          +{org.services.length - 3}
+                          Web ({org.assigned_services.web})
                         </Badge>
+                      )}
+                      {org.assigned_services.android && (
+                        <Badge variant="outline" className="text-xs">
+                          Android ({org.assigned_services.android})
+                        </Badge>
+                      )}
+                      {org.assigned_services.ios && (
+                        <Badge variant="outline" className="text-xs">
+                          iOS ({org.assigned_services.ios})
+                        </Badge>
+                      )}
+                      {!org.assigned_services.web && !org.assigned_services.android && !org.assigned_services.ios && (
+                        <span className="text-xs text-gray-400">No services assigned</span>
                       )}
                     </div>
                   )}

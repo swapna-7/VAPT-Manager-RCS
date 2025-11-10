@@ -47,6 +47,7 @@ export default function DashboardLayout({
     { href: "/dashboard/admin/organizations", label: "Organizations", icon: Building2 },
     { href: "/dashboard/admin/security-teams", label: "Security Teams", icon: Shield },
     { href: "/dashboard/admin/vulnerabilities", label: "Vulnerabilities", icon: CircleCheckBig },
+    { href: "/dashboard/admin/verifications", label: "Verification Queue", icon: UserLock },
     { href: "/dashboard/admin/notifications", label: "Notifications", icon: Bell },
   ];
 

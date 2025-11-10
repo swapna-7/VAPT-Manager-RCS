@@ -46,7 +46,7 @@ export default function DashboardLayout({
   const navItems = [
     { href: "/dashboard/client", label: "Dashboard", icon: LayoutDashboard },
     { href: "/dashboard/client/vulnerabilities", label: "My Vulnerabilities", icon: AlertTriangle },
-    { href: "/dashboard/client/verification", label: "Verification Queue", icon: CircleCheckBig },
+    { href: "/dashboard/client/verifications", label: "Verification Queue", icon: CircleCheckBig },
     { href: "/dashboard/client/profile", label: "Profile", icon: UserRound },
     { href: "/dashboard/client/notifications", label: "Notifications", icon: Bell },
   ];

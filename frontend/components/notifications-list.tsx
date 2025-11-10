@@ -112,8 +112,10 @@ export default function NotificationsList({ initialNotifications }: Notification
       case "organization_signup":
         return `New organization "${payload.name}" has been registered and is pending approval`;
       case "email_access_request":
-        const emailCount = Array.isArray(payload.emails) ? payload.emails.length : 0;
-        return `${emailCount} email${emailCount !== 1 ? "s" : ""} requested for access to organization (pending approval)`;
+        const userCount = Array.isArray(payload.users) 
+          ? payload.users.length 
+          : (Array.isArray(payload.emails) ? payload.emails.length : 0);
+        return `${userCount} user${userCount !== 1 ? "s" : ""} requested for access to organization (pending approval)`;
       case "approval":
         return `User ${payload.user_id ? "has been approved" : "approval processed"}`;
       default:
@@ -150,14 +152,167 @@ export default function NotificationsList({ initialNotifications }: Notification
                 <p className={`text-sm ${!notification.read ? "font-semibold" : ""}`}>
                   {getNotificationMessage(notification)}
                 </p>
-                {isEmailAccessRequest && Array.isArray(payload.emails) && (
-                  <div className="mt-2 p-2 bg-white rounded border text-xs">
-                    <p className="font-medium mb-1">Emails:</p>
-                    <ul className="list-disc list-inside space-y-1">
-                      {payload.emails.map((email: string, idx: number) => (
-                        <li key={idx} className="text-gray-700">{email}</li>
-                      ))}
-                    </ul>
+                {isEmailAccessRequest && (
+                  <div className="mt-2 p-3 bg-white rounded border text-xs space-y-3">
+                    {Array.isArray(payload.users) ? (
+                      <>
+                        <div>
+                          <p className="font-medium mb-1.5 text-gray-900">Users requesting access:</p>
+                          <ul className="space-y-2">
+                            {payload.users.map((user: { name: string; email: string; role?: string }, idx: number) => (
+                              <li key={idx} className="text-gray-700 flex flex-col gap-0.5 pl-3 border-l-2 border-blue-200">
+                                <div className="font-medium text-gray-900">{user.name}</div>
+                                <div className="text-gray-600">{user.email}</div>
+                                {user.role && (
+                                  <div className="text-gray-500 italic">Role: {user.role}</div>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </>
+                    ) : Array.isArray(payload.emails) ? (
+                      <>
+                        <div>
+                          <p className="font-medium mb-1.5 text-gray-900">Emails:</p>
+                          <ul className="list-disc list-inside space-y-1">
+                            {payload.emails.map((email: string, idx: number) => (
+                              <li key={idx} className="text-gray-700">{email}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </>
+                    ) : null}
+                    
+                    {/* Service Details */}
+                    {payload.services && (
+                      <div className="border-t pt-3">
+                        <p className="font-medium mb-2 text-gray-900">Requested Services:</p>
+                        
+                        {/* Web Application PT */}
+                        {payload.services.web && (
+                          <div className="mb-3 p-2 bg-blue-50 rounded border border-blue-200">
+                            <div className="font-semibold text-blue-900 mb-1">
+                              Web Application PT - {payload.services.web.tier}
+                            </div>
+                            {payload.services.web.details && (
+                              <div className="space-y-1.5 mt-2 text-gray-700">
+                                {payload.services.web.details.scopeUrl && (
+                                  <div>
+                                    <span className="font-medium">Scope URL:</span>{" "}
+                                    <span className="text-blue-600">{payload.services.web.details.scopeUrl}</span>
+                                  </div>
+                                )}
+                                {payload.services.web.details.userMatrix && (
+                                  <div>
+                                    <span className="font-medium">User Matrix:</span>
+                                    <pre className="mt-1 p-1.5 bg-white rounded text-xs whitespace-pre-wrap">
+                                      {payload.services.web.details.userMatrix}
+                                    </pre>
+                                  </div>
+                                )}
+                                {payload.services.web.details.credentials && (
+                                  <div>
+                                    <span className="font-medium">Credentials:</span>
+                                    <pre className="mt-1 p-1.5 bg-white rounded text-xs whitespace-pre-wrap">
+                                      {payload.services.web.details.credentials}
+                                    </pre>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* Android Application PT */}
+                        {payload.services.android && (
+                          <div className="mb-3 p-2 bg-green-50 rounded border border-green-200">
+                            <div className="font-semibold text-green-900 mb-1">
+                              Android Application PT - {payload.services.android.tier}
+                            </div>
+                            {payload.services.android.details && (
+                              <div className="space-y-1.5 mt-2 text-gray-700">
+                                {payload.services.android.details.sslPinnedApk && (
+                                  <div>
+                                    <span className="font-medium">SSL Pinned APK:</span>{" "}
+                                    <span className="text-blue-600 break-all">{payload.services.android.details.sslPinnedApk}</span>
+                                  </div>
+                                )}
+                                {payload.services.android.details.sslUnpinnedApk && (
+                                  <div>
+                                    <span className="font-medium">SSL Unpinned APK:</span>{" "}
+                                    <span className="text-blue-600 break-all">{payload.services.android.details.sslUnpinnedApk}</span>
+                                  </div>
+                                )}
+                                {payload.services.android.details.userMatrix && (
+                                  <div>
+                                    <span className="font-medium">User Matrix:</span>
+                                    <pre className="mt-1 p-1.5 bg-white rounded text-xs whitespace-pre-wrap">
+                                      {payload.services.android.details.userMatrix}
+                                    </pre>
+                                  </div>
+                                )}
+                                {payload.services.android.details.credentials && (
+                                  <div>
+                                    <span className="font-medium">Credentials:</span>
+                                    <pre className="mt-1 p-1.5 bg-white rounded text-xs whitespace-pre-wrap">
+                                      {payload.services.android.details.credentials}
+                                    </pre>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* iOS Application PT */}
+                        {payload.services.ios && (
+                          <div className="mb-3 p-2 bg-purple-50 rounded border border-purple-200">
+                            <div className="font-semibold text-purple-900 mb-1">
+                              iOS Application PT - {payload.services.ios.tier}
+                            </div>
+                            {payload.services.ios.details && (
+                              <div className="space-y-1.5 mt-2 text-gray-700">
+                                {payload.services.ios.details.testflightPinned && (
+                                  <div>
+                                    <span className="font-medium">TestFlight (Pinned):</span>{" "}
+                                    <span className="text-blue-600 break-all">{payload.services.ios.details.testflightPinned}</span>
+                                  </div>
+                                )}
+                                {payload.services.ios.details.testflightUnpinned && (
+                                  <div>
+                                    <span className="font-medium">TestFlight (Unpinned):</span>{" "}
+                                    <span className="text-blue-600 break-all">{payload.services.ios.details.testflightUnpinned}</span>
+                                  </div>
+                                )}
+                                {payload.services.ios.details.ipaFile && (
+                                  <div>
+                                    <span className="font-medium">IPA File:</span>{" "}
+                                    <span className="text-blue-600 break-all">{payload.services.ios.details.ipaFile}</span>
+                                  </div>
+                                )}
+                                {payload.services.ios.details.userMatrix && (
+                                  <div>
+                                    <span className="font-medium">User Matrix:</span>
+                                    <pre className="mt-1 p-1.5 bg-white rounded text-xs whitespace-pre-wrap">
+                                      {payload.services.ios.details.userMatrix}
+                                    </pre>
+                                  </div>
+                                )}
+                                {payload.services.ios.details.credentials && (
+                                  <div>
+                                    <span className="font-medium">Credentials:</span>
+                                    <pre className="mt-1 p-1.5 bg-white rounded text-xs whitespace-pre-wrap">
+                                      {payload.services.ios.details.credentials}
+                                    </pre>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
                 <p className="text-xs text-gray-500 mt-1">

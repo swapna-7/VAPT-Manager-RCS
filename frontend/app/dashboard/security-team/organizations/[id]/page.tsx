@@ -36,10 +36,10 @@ export default async function OrganizationDetailPage({ params }: PageProps) {
     redirect("/auth/login");
   }
 
-  // Verify this organization is assigned to the user
+  // Verify this organization is assigned to the user and get assigned services
   const { data: assignment } = await supabase
     .from("security_team_organizations")
-    .select("id")
+    .select("id, services")
     .eq("security_team_user_id", user.id)
     .eq("organization_id", id)
     .single();
@@ -47,6 +47,9 @@ export default async function OrganizationDetailPage({ params }: PageProps) {
   if (!assignment) {
     redirect("/dashboard/security-team/organizations");
   }
+
+  // Get the assigned services from the assignment
+  const assignedServices = assignment.services || {};
 
   // Fetch organization details
   const { data: organization, error } = await supabase
@@ -174,21 +177,31 @@ export default async function OrganizationDetailPage({ params }: PageProps) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
-              Services
+              Assigned Services
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {services && Array.isArray(services) && services.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {services.map((service: string, index: number) => (
-                  <Badge key={index} variant="outline">
-                    {service}
-                  </Badge>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500">No services listed</p>
-            )}
+            <p className="text-xs text-gray-500 mb-3">Services you are assigned to work on</p>
+            <div className="flex flex-wrap gap-2">
+              {assignedServices.web && (
+                <Badge variant="outline" className="text-sm">
+                  Web Application PT ({assignedServices.web})
+                </Badge>
+              )}
+              {assignedServices.android && (
+                <Badge variant="outline" className="text-sm">
+                  Android Application PT ({assignedServices.android})
+                </Badge>
+              )}
+              {assignedServices.ios && (
+                <Badge variant="outline" className="text-sm">
+                  iOS Application PT ({assignedServices.ios})
+                </Badge>
+              )}
+              {!assignedServices.web && !assignedServices.android && !assignedServices.ios && (
+                <p className="text-gray-500">No services assigned</p>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

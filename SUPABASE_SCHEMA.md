@@ -13,7 +13,8 @@ create table public.profiles (
   status text not null default 'pending'::text,
   suspended boolean not null default false,
   constraint profiles_pkey primary key (id),
-  constraint profiles_id_fkey foreign KEY (id) references auth.users (id) on delete CASCADE
+  constraint profiles_id_fkey foreign KEY (id) references auth.users (id) on delete CASCADE,
+  constraint profiles_organization_id_fkey foreign KEY (organization_id) references public.organizations (id) on delete set null
 ) TABLESPACE pg_default;
 
 create table public.organizations (
@@ -54,13 +55,14 @@ create table public.security_team_organizations (
   id uuid not null default gen_random_uuid (),
   security_team_user_id uuid not null,
   organization_id uuid not null,
+  services jsonb null,
+  deadline timestamp with time zone null,
   assigned_at timestamp with time zone null default now(),
   assigned_by uuid null,
   constraint security_team_organizations_pkey primary key (id),
   constraint security_team_organizations_user_fkey foreign KEY (security_team_user_id) references auth.users (id) on delete CASCADE,
   constraint security_team_organizations_org_fkey foreign KEY (organization_id) references public.organizations (id) on delete CASCADE,
-  constraint security_team_organizations_assigned_by_fkey foreign KEY (assigned_by) references auth.users (id) on delete set null,
-  constraint security_team_organizations_unique unique (security_team_user_id, organization_id)
+  constraint security_team_organizations_assigned_by_fkey foreign KEY (assigned_by) references auth.users (id) on delete set null
 ) TABLESPACE pg_default;
 
 other things run in sql editor of supabase:
@@ -69,9 +71,37 @@ create extension if not exists pgcrypto;
 -- Add suspended column to profiles if it doesn't exist
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS suspended boolean NOT NULL DEFAULT false;
 
+-- Add foreign key constraint from profiles to organizations
+ALTER TABLE public.profiles
+ADD CONSTRAINT profiles_organization_id_fkey 
+FOREIGN KEY (organization_id) 
+REFERENCES public.organizations(id) 
+ON DELETE SET NULL;
+
+-- Create an index on organization_id for better query performance
+CREATE INDEX IF NOT EXISTS idx_profiles_organization_id 
+ON public.profiles(organization_id);
+
 -- Add notes and updated_at columns to organizations if they don't exist
 ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS notes text;
 ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now();
+
+-- Add services column to security_team_organizations for granular service assignment
+ALTER TABLE public.security_team_organizations
+ADD COLUMN IF NOT EXISTS services jsonb DEFAULT NULL;
+
+-- Add deadline column to security_team_organizations
+ALTER TABLE public.security_team_organizations
+ADD COLUMN IF NOT EXISTS deadline timestamp with time zone NULL;
+
+-- Drop the unique constraint to allow same user + org but different services
+ALTER TABLE public.security_team_organizations
+DROP CONSTRAINT IF EXISTS security_team_organizations_unique;
+
+-- Create an index on services for better query performance
+CREATE INDEX IF NOT EXISTS idx_security_team_organizations_services 
+ON public.security_team_organizations USING GIN (services);
+
 alter table public.notifications
 add constraint notifications_actor_fkey foreign key (actor_id)
 references auth.users (id) on delete set null;

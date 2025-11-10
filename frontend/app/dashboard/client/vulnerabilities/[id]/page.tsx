@@ -23,6 +23,7 @@ interface Vulnerability {
   client_comments: string | null;
   client_updated_at: string | null;
   admin_comments: string | null;
+  verification_status: string | null;
   created_at: string;
   approved_at: string | null;
   organizations: {
@@ -269,6 +270,23 @@ export default function ClientVulnerabilityDetailPage({ params }: { params: Prom
             <Badge className={getStatusColor(vulnerability.client_status)}>
               {vulnerability.client_status ? vulnerability.client_status.charAt(0).toUpperCase() + vulnerability.client_status.slice(1) : "Open"}
             </Badge>
+            {vulnerability.verification_status && vulnerability.verification_status !== "not_submitted" && (
+              <Badge className={
+                vulnerability.verification_status === "verified" 
+                  ? "bg-green-100 text-green-800"
+                  : vulnerability.verification_status === "pending_verification" 
+                  ? "bg-yellow-100 text-yellow-800"
+                  : vulnerability.verification_status === "verification_rejected"
+                  ? "bg-red-100 text-red-800"
+                  : "bg-gray-100 text-gray-800"
+              }>
+                {vulnerability.verification_status === "verified" 
+                  ? "Verified" 
+                  : vulnerability.verification_status === "pending_verification"
+                  ? "Pending Verification"
+                  : "Verification Rejected"}
+              </Badge>
+            )}
           </div>
         </div>
       </div>
