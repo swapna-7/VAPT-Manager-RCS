@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { CheckCircle2, UserPlus, Building2, Clock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useRouter } from "next/navigation";
 import { formatDateTime } from "@/lib/utils";
 
@@ -22,6 +23,7 @@ interface NotificationsListProps {
 export default function NotificationsList({ initialNotifications }: NotificationsListProps) {
   const [notifications, setNotifications] = useState(initialNotifications);
   const [approving, setApproving] = useState<Record<string, boolean>>({});
+  const [activeTab, setActiveTab] = useState("unread");
   const router = useRouter();
 
   const handleApproveEmailAccess = async (notificationId: string) => {
@@ -65,10 +67,19 @@ export default function NotificationsList({ initialNotifications }: Notification
 
   const markAsRead = async (notificationId: string) => {
     const supabase = createClient();
-    await supabase
+    const { data, error } = await supabase
       .from("notifications")
       .update({ read: true })
-      .eq("id", notificationId);
+      .eq("id", notificationId)
+      .select();
+
+    if (error) {
+      console.error("Error marking notification as read:", error);
+      alert("Failed to mark notification as read. Please check console for details.");
+      return;
+    }
+
+    console.log("Notification marked as read:", data);
 
     setNotifications((prev) =>
       prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
@@ -80,10 +91,19 @@ export default function NotificationsList({ initialNotifications }: Notification
     const unreadIds = notifications.filter((n) => !n.read).map((n) => n.id);
     
     if (unreadIds.length > 0) {
-      await supabase
+      const { data, error } = await supabase
         .from("notifications")
         .update({ read: true })
-        .in("id", unreadIds);
+        .in("id", unreadIds)
+        .select();
+
+      if (error) {
+        console.error("Error marking all notifications as read:", error);
+        alert("Failed to mark all notifications as read. Please check console for details.");
+        return;
+      }
+
+      console.log("All notifications marked as read:", data);
 
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     }
@@ -127,14 +147,84 @@ export default function NotificationsList({ initialNotifications }: Notification
     return <p className="text-sm text-gray-500">No notifications</p>;
   }
 
+  // Filter notifications based on active tab
+  const filteredNotifications = notifications.filter((n) => {
+    if (activeTab === "unread") return !n.read;
+    if (activeTab === "read") return n.read;
+    return true;
+  });
+
+  // Calculate counts
+  const unreadCount = notifications.filter((n) => !n.read).length;
+  const readCount = notifications.filter((n) => n.read).length;
+
   return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
+    <Tabs defaultValue="unread" onValueChange={setActiveTab} className="w-full">
+      <div className="flex items-center justify-between mb-4">
+        <TabsList>
+          <TabsTrigger value="unread">
+            Unread ({unreadCount})
+          </TabsTrigger>
+          <TabsTrigger value="read">
+            Read ({readCount})
+          </TabsTrigger>
+        </TabsList>
         <Button variant="outline" size="sm" onClick={markAllAsRead}>
           Mark all as read
         </Button>
       </div>
-      <div className="space-y-3">
+
+      <TabsContent value="unread" className="mt-0">
+        {filteredNotifications.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center py-8">No unread notifications</p>
+        ) : (
+          <NotificationItems 
+            notifications={filteredNotifications}
+            approving={approving}
+            handleApproveEmailAccess={handleApproveEmailAccess}
+            markAsRead={markAsRead}
+            getNotificationIcon={getNotificationIcon}
+            getNotificationMessage={getNotificationMessage}
+          />
+        )}
+      </TabsContent>
+
+      <TabsContent value="read" className="mt-0">
+        {filteredNotifications.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center py-8">No read notifications</p>
+        ) : (
+          <NotificationItems 
+            notifications={filteredNotifications}
+            approving={approving}
+            handleApproveEmailAccess={handleApproveEmailAccess}
+            markAsRead={markAsRead}
+            getNotificationIcon={getNotificationIcon}
+            getNotificationMessage={getNotificationMessage}
+          />
+        )}
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+// Separate component for rendering notification items
+function NotificationItems({
+  notifications,
+  approving,
+  handleApproveEmailAccess,
+  markAsRead,
+  getNotificationIcon,
+  getNotificationMessage
+}: {
+  notifications: Notification[];
+  approving: Record<string, boolean>;
+  handleApproveEmailAccess: (id: string) => void;
+  markAsRead: (id: string) => void;
+  getNotificationIcon: (type: string) => React.ReactNode;
+  getNotificationMessage: (notification: Notification) => string;
+}) {
+  return (
+    <div className="space-y-3">
       {notifications.map((notification) => {
         const payload = notification.payload || {};
         const isEmailAccessRequest = notification.type === "email_access_request" && !notification.read;
@@ -185,17 +275,17 @@ export default function NotificationsList({ initialNotifications }: Notification
                     ) : null}
                     
                     {/* Service Details */}
-                    {payload.services && (
+                    {payload.services && typeof payload.services === 'object' && (
                       <div className="border-t pt-3">
                         <p className="font-medium mb-2 text-gray-900">Requested Services:</p>
                         
                         {/* Web Application PT */}
-                        {payload.services.web && (
+                        {payload.services.web && typeof payload.services.web === 'object' && (
                           <div className="mb-3 p-2 bg-blue-50 rounded border border-blue-200">
                             <div className="font-semibold text-blue-900 mb-1">
-                              Web Application PT - {payload.services.web.tier}
+                              Web Application PT - {typeof payload.services.web.tier === 'string' ? payload.services.web.tier : 'N/A'}
                             </div>
-                            {payload.services.web.details && (
+                            {payload.services.web.details && typeof payload.services.web.details === 'object' && (
                               <div className="space-y-1.5 mt-2 text-gray-700">
                                 {payload.services.web.details.scopeUrl && (
                                   <div>
@@ -225,12 +315,12 @@ export default function NotificationsList({ initialNotifications }: Notification
                         )}
                         
                         {/* Android Application PT */}
-                        {payload.services.android && (
+                        {payload.services.android && typeof payload.services.android === 'object' && (
                           <div className="mb-3 p-2 bg-green-50 rounded border border-green-200">
                             <div className="font-semibold text-green-900 mb-1">
-                              Android Application PT - {payload.services.android.tier}
+                              Android Application PT - {typeof payload.services.android.tier === 'string' ? payload.services.android.tier : 'N/A'}
                             </div>
-                            {payload.services.android.details && (
+                            {payload.services.android.details && typeof payload.services.android.details === 'object' && (
                               <div className="space-y-1.5 mt-2 text-gray-700">
                                 {payload.services.android.details.sslPinnedApk && (
                                   <div>
@@ -266,12 +356,12 @@ export default function NotificationsList({ initialNotifications }: Notification
                         )}
                         
                         {/* iOS Application PT */}
-                        {payload.services.ios && (
+                        {payload.services.ios && typeof payload.services.ios === 'object' && (
                           <div className="mb-3 p-2 bg-purple-50 rounded border border-purple-200">
                             <div className="font-semibold text-purple-900 mb-1">
-                              iOS Application PT - {payload.services.ios.tier}
+                              iOS Application PT - {typeof payload.services.ios.tier === 'string' ? payload.services.ios.tier : 'N/A'}
                             </div>
-                            {payload.services.ios.details && (
+                            {payload.services.ios.details && typeof payload.services.ios.details === 'object' && (
                               <div className="space-y-1.5 mt-2 text-gray-700">
                                 {payload.services.ios.details.testflightPinned && (
                                   <div>
@@ -345,7 +435,6 @@ export default function NotificationsList({ initialNotifications }: Notification
           </div>
         );
       })}
-      </div>
     </div>
   );
 }

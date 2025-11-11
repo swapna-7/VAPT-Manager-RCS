@@ -45,7 +45,7 @@ export async function POST(req: Request) {
     const userList = users && Array.isArray(users) 
       ? users 
       : emails && Array.isArray(emails)
-      ? emails.map((email: string) => ({ name: email.split('@')[0], email }))
+      ? emails.map((email: string) => ({ name: email.split('@')[0], email, role: 'Client' }))
       : [];
 
     if (!organization_id || userList.length === 0 || !password) {
@@ -55,13 +55,25 @@ export async function POST(req: Request) {
       );
     }
 
+    console.log("Processing user list:", JSON.stringify(userList, null, 2));
+
     // Create user accounts for each user
     const createdUsers: string[] = [];
     const errors: string[] = [];
 
     for (const user of userList) {
-      const email = typeof user === 'string' ? user : user.email;
-      const fullName = typeof user === 'string' ? email.split('@')[0] : user.name;
+      const email = typeof user === 'string' ? user : (user.email || '');
+      const fullName = typeof user === 'string' 
+        ? email.split('@')[0] 
+        : (user.name || user.full_name || email.split('@')[0]);
+      // Custom designation from sign-up (e.g., "Web Dev", "Manager", etc.)
+      const userDesignation = typeof user === 'string' ? null : (user.role || null);
+      // System role is always "Client" for organization users
+      const systemRole = 'Client';
+      
+      console.log(`Creating user: email=${email}, fullName=${fullName}, role=${systemRole}, designation=${userDesignation}`);
+      
+      let authUserId: string | null = null;
       
       try {
         // Create auth user
@@ -69,45 +81,80 @@ export async function POST(req: Request) {
           email: email.trim(),
           password: password,
           email_confirm: true, // Auto-confirm email
+          user_metadata: {
+            full_name: fullName.trim(),
+            role: systemRole,
+          },
         });
 
         if (authError) {
-          errors.push(`${email}: ${authError.message}`);
-          continue;
+          throw new Error(`Auth creation failed: ${authError.message}`);
         }
 
         if (!authData.user?.id) {
-          errors.push(`${email}: Failed to create user`);
-          continue;
+          throw new Error('Failed to create user - no user ID returned');
         }
 
-        const userId = authData.user.id;
+        authUserId = authData.user.id;
+        console.log(`✅ Auth user created: userId=${authUserId}`);
 
-        // Wait for trigger to create profile
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        // Update profile with organization details and full name
-        const { error: profileError } = await supabase
+        // Create profile explicitly (don't rely on triggers)
+        console.log(`Creating profile for userId=${authUserId} with fullName="${fullName}", role="${systemRole}", designation="${userDesignation}"`);
+        const { error: profileInsertError } = await supabase
           .from("profiles")
-          .update({
+          .insert({
+            id: authUserId,
             full_name: fullName.trim(),
-            role: "Client",
+            role: systemRole, // Always "Client" for organization users
+            designation: userDesignation, // Custom job title from sign-up
             organization_id: organization_id,
-            status: "approved", // Auto-approve since super admin approved
-          })
-          .eq("id", userId);
+            status: "approved",
+            suspended: false,
+          });
 
-        if (profileError) {
-          errors.push(`${email}: ${profileError.message}`);
-          // Clean up auth user if profile creation failed
-          await supabase.auth.admin.deleteUser(userId);
-          continue;
+        if (profileInsertError) {
+          throw new Error(`Profile creation failed: ${profileInsertError.message}`);
         }
+
+        console.log(`✅ Profile created successfully for ${email}`);
+
+        // Verify profile was created
+        const { data: verifyProfile, error: verifyError } = await supabase
+          .from("profiles")
+          .select("id, full_name, role, organization_id, status")
+          .eq("id", authUserId)
+          .single();
+
+        if (verifyError || !verifyProfile) {
+          throw new Error(`Profile verification failed: ${verifyError?.message || 'Profile not found'}`);
+        }
+
+        console.log(`✅ Profile verified:`, verifyProfile);
 
         createdUsers.push(email);
+        
       } catch (err) {
-        errors.push(`${email}: ${err instanceof Error ? err.message : String(err)}`);
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        console.error(`❌ Failed to create user ${email}:`, errorMessage);
+        errors.push(`${email}: ${errorMessage}`);
+        
+        // Rollback: delete auth user if it was created
+        if (authUserId) {
+          console.log(`🔄 Rolling back auth user: ${authUserId}`);
+          await supabase.auth.admin.deleteUser(authUserId);
+        }
       }
+    }
+
+    // Approve the organization if not already approved
+    const { error: orgApproveError } = await supabase
+      .from("organizations")
+      .update({ status: "approved" })
+      .eq("id", organization_id);
+
+    if (orgApproveError) {
+      console.error("Error approving organization:", orgApproveError);
+      // Don't fail the whole operation, but log it
     }
 
     // Mark notification as read

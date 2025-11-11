@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { FileText, ArrowLeft, Loader2, Building2, User, Calendar, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 
@@ -24,6 +23,11 @@ interface Vulnerability {
   approved_at: string | null;
   assigned_to_client: string | null;
   client_status: string | null;
+  service_type: string | null;
+  poc: string | null;
+  instances: string | null;
+  cwe_id: string | null;
+  security_team_comments: string | null;
   organizations: {
     name: string;
     contact_email: string | null;
@@ -267,12 +271,53 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ id:
           <CardTitle>Vulnerability Information</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Service Type */}
+          {vulnerability.service_type && (
+            <div>
+              <p className="text-sm font-medium text-gray-600 mb-2">Service Type</p>
+              <Badge variant="outline" className="text-sm">
+                {vulnerability.service_type}
+              </Badge>
+            </div>
+          )}
+
           <div>
             <p className="text-sm font-medium text-gray-600 mb-2">Description</p>
-            <p className="text-gray-900 whitespace-pre-wrap">{vulnerability.description}</p>
+            <div className="bg-gray-50 p-4 rounded-lg border">
+              <p className="text-gray-900 whitespace-pre-wrap">{vulnerability.description}</p>
+            </div>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          {/* POC */}
+          {vulnerability.poc && (
+            <div>
+              <p className="text-sm font-medium text-gray-600 mb-2">Proof of Concept (POC)</p>
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                <a 
+                  href={vulnerability.poc} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 font-mono text-sm break-all underline"
+                >
+                  {vulnerability.poc}
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* Instances */}
+          {vulnerability.instances && (
+            <div>
+              <p className="text-sm font-medium text-gray-600 mb-2">Instances</p>
+              <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                <pre className="text-gray-900 whitespace-pre-wrap font-mono text-sm">
+                  {vulnerability.instances}
+                </pre>
+              </div>
+            </div>
+          )}
+
+          <div className="grid md:grid-cols-3 gap-6">
             <div>
               <p className="text-sm font-medium text-gray-600 mb-2">Severity</p>
               <Badge className={getSeverityColor(vulnerability.severity)}>
@@ -281,21 +326,43 @@ export default function SubmissionDetailPage({ params }: { params: Promise<{ id:
             </div>
             {vulnerability.cvss_score && (
               <div>
-                <p className="text-sm font-medium text-gray-600 mb-2">CVSS Score</p>
+                <p className="text-sm font-medium text-gray-600 mb-2">CVSS Score (v3.1)</p>
                 <p className="text-2xl font-bold text-gray-900">{vulnerability.cvss_score}</p>
+              </div>
+            )}
+            {vulnerability.cwe_id && (
+              <div>
+                <p className="text-sm font-medium text-gray-600 mb-2">CWE ID</p>
+                <Badge variant="outline" className="text-sm font-mono">
+                  {vulnerability.cwe_id}
+                </Badge>
               </div>
             )}
           </div>
 
           <div>
             <p className="text-sm font-medium text-gray-600 mb-2">Affected Systems</p>
-            <p className="text-gray-900 whitespace-pre-wrap">{vulnerability.affected_systems}</p>
+            <div className="bg-gray-50 p-4 rounded-lg border">
+              <p className="text-gray-900 whitespace-pre-wrap">{vulnerability.affected_systems}</p>
+            </div>
           </div>
 
           <div>
-            <p className="text-sm font-medium text-gray-600 mb-2">Remediation Steps</p>
-            <p className="text-gray-900 whitespace-pre-wrap">{vulnerability.remediation}</p>
+            <p className="text-sm font-medium text-gray-600 mb-2">Countermeasures / Remediation</p>
+            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+              <p className="text-gray-900 whitespace-pre-wrap">{vulnerability.remediation}</p>
+            </div>
           </div>
+
+          {/* Security Team Comments */}
+          {vulnerability.security_team_comments && (
+            <div>
+              <p className="text-sm font-medium text-gray-600 mb-2">Security Team Comments</p>
+              <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                <p className="text-gray-900 whitespace-pre-wrap">{vulnerability.security_team_comments}</p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

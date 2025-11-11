@@ -216,7 +216,16 @@ CREATE POLICY "Admins can update all profiles"
 -- RLS Policies for notifications
 DROP POLICY IF EXISTS "Super-admins can view all notifications" ON public.notifications;
 DROP POLICY IF EXISTS "Admins can view all notifications" ON public.notifications;
+DROP POLICY IF EXISTS "Users can view their own notifications" ON public.notifications;
 DROP POLICY IF EXISTS "Anyone can insert notifications" ON public.notifications;
+DROP POLICY IF EXISTS "Users can update their own notifications" ON public.notifications;
+DROP POLICY IF EXISTS "Admins can update all notifications" ON public.notifications;
+DROP POLICY IF EXISTS "Super-admins can update all notifications" ON public.notifications;
+
+-- SELECT policies
+CREATE POLICY "Users can view their own notifications"
+  ON public.notifications FOR SELECT
+  USING (user_id = auth.uid());
 
 CREATE POLICY "Super-admins can view all notifications"
   ON public.notifications FOR SELECT
@@ -226,9 +235,26 @@ CREATE POLICY "Admins can view all notifications"
   ON public.notifications FOR SELECT
   USING (public.is_admin_or_super_admin(auth.uid()));
 
+-- INSERT policies
 CREATE POLICY "Anyone can insert notifications"
   ON public.notifications FOR INSERT
   WITH CHECK (true);
+
+-- UPDATE policies (allow marking notifications as read)
+CREATE POLICY "Users can update their own notifications"
+  ON public.notifications FOR UPDATE
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "Admins can update all notifications"
+  ON public.notifications FOR UPDATE
+  USING (public.is_admin_or_super_admin(auth.uid()))
+  WITH CHECK (public.is_admin_or_super_admin(auth.uid()));
+
+CREATE POLICY "Super-admins can update all notifications"
+  ON public.notifications FOR UPDATE
+  USING (public.is_super_admin(auth.uid()))
+  WITH CHECK (public.is_super_admin(auth.uid()));
 
 -- RLS Policies for organizations
 DROP POLICY IF EXISTS "Users can view their own organization" ON public.organizations;
@@ -311,12 +337,17 @@ CREATE TABLE IF NOT EXISTS public.vulnerabilities (
   submitted_by UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   
   -- Vulnerability Details
-  title TEXT NOT NULL,
-  description TEXT NOT NULL,
+  service_type TEXT,                      -- Service type (Web Application PT, Android Application PT, iOS Application PT)
+  title TEXT NOT NULL,                    -- Finding name
+  description TEXT NOT NULL,              -- Technical description
+  poc TEXT,                               -- Proof of Concept link
+  instances TEXT,                         -- Affected instances link
   severity TEXT NOT NULL CHECK (severity IN ('Critical', 'High', 'Medium', 'Low', 'Informational')),
   cvss_score DECIMAL(3,1) CHECK (cvss_score >= 0 AND cvss_score <= 10),
+  cwe_id TEXT,                            -- Common Weakness Enumeration ID
   affected_systems TEXT NOT NULL,
-  remediation TEXT NOT NULL,
+  remediation TEXT NOT NULL,              -- Countermeasures
+  security_team_comments TEXT,            -- Comments visible to all roles
   
   -- Status and Approval (Admin)
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
@@ -329,6 +360,7 @@ CREATE TABLE IF NOT EXISTS public.vulnerabilities (
   client_status TEXT CHECK (client_status IN ('open', 'reopened', 'closed')),
   client_comments TEXT,
   client_updated_at TIMESTAMPTZ,
+  client_deadline TIMESTAMPTZ,
   
   -- Timestamps
   created_at TIMESTAMPTZ DEFAULT now(),

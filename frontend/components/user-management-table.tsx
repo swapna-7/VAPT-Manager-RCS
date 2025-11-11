@@ -20,6 +20,8 @@ interface Profile {
     id: string;
     name: string;
   }[] | null;
+  isPendingRequest?: boolean;
+  email?: string;
 }
 
 interface UserManagementTableProps {
@@ -36,7 +38,7 @@ export default function UserManagementTable({ profiles: initialProfiles }: UserM
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [fetchingData, setFetchingData] = useState(false);
 
-  // Client-side fallback: fetch profiles if initialProfiles is empty
+  // Client-side fallback: fetch profiles + access requests if initialProfiles is empty
   useEffect(() => {
     if (initialProfiles.length === 0 && !fetchingData) {
       setFetchingData(true);
@@ -56,7 +58,6 @@ export default function UserManagementTable({ profiles: initialProfiles }: UserM
               .order("created_at", { ascending: false });
             
             if (!fallbackError && fallbackData) {
-              // Add suspended: false to all profiles
               data = fallbackData.map(p => ({ ...p, suspended: false }));
               error = null;
             }
@@ -64,20 +65,17 @@ export default function UserManagementTable({ profiles: initialProfiles }: UserM
           
           if (error) {
             console.error("Client-side fetch error:", error);
-          } else if (data && data.length > 0) {
+          } else if (data) {
             // Fetch organizations separately
-            const orgIds = data
-              .filter(p => p.organization_id)
-              .map(p => p.organization_id);
+            const allOrgIds = data.filter(p => p.organization_id).map(p => p.organization_id);
             
-            if (orgIds.length > 0) {
+            if (allOrgIds.length > 0) {
               const { data: organizations } = await supabase
                 .from("organizations")
                 .select("id, name")
-                .in("id", orgIds);
+                .in("id", allOrgIds);
               
               if (organizations) {
-                // Create a map for quick lookup
                 const orgMap = new Map(organizations.map(org => [org.id, org]));
                 
                 // Attach organization data to profiles
@@ -106,35 +104,37 @@ export default function UserManagementTable({ profiles: initialProfiles }: UserM
   // Fetch user emails
   useEffect(() => {
     const fetchEmails = async () => {
-      const supabase = createClient();
-      const emails: Record<string, string> = {};
-      
-      for (const profile of profiles) {
+      // For pending requests, email is already in the profile
+      const emailsFromProfiles: Record<string, string> = {};
+      profiles.forEach(p => {
+        if (p.email) {
+          emailsFromProfiles[p.id] = p.email;
+        }
+      });
+
+      // Fetch emails for actual users via API
+      const userIdsNeedingEmails = profiles
+        .filter(p => !p.isPendingRequest && !p.email)
+        .map(p => p.id);
+
+      if (userIdsNeedingEmails.length > 0) {
         try {
-          // Get email from auth.users via admin API or direct query if possible
-          // For now, we'll use a workaround - store email in profile or fetch via API
-          const { data: { user } } = await supabase.auth.admin?.getUserById(profile.id).catch(() => ({ data: { user: null } }));
-          // Since we can't access admin API from client, we'll need to create an API route
-          // For now, let's fetch via API endpoint
+          const response = await fetch("/api/admin/user-emails", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_ids: userIdsNeedingEmails }),
+          });
+          const data = await response.json();
+          if (data.emails) {
+            setUserEmails({ ...emailsFromProfiles, ...data.emails });
+            return;
+          }
         } catch (e) {
-          // Ignore
+          console.error("Failed to fetch emails", e);
         }
       }
       
-      // Fetch emails via API
-      try {
-        const response = await fetch("/api/admin/user-emails", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_ids: profiles.map((p) => p.id) }),
-        });
-        const data = await response.json();
-        if (data.emails) {
-          setUserEmails(data.emails);
-        }
-      } catch (e) {
-        console.error("Failed to fetch emails", e);
-      }
+      setUserEmails(emailsFromProfiles);
     };
 
     fetchEmails();
@@ -168,20 +168,29 @@ export default function UserManagementTable({ profiles: initialProfiles }: UserM
     setFilteredProfiles(filtered);
   }, [searchTerm, statusFilter, roleFilter, profiles, userEmails]);
 
-  const handleApprove = async (userId: string) => {
+  const handleApprove = async (userId: string, isPendingRequest?: boolean) => {
     setLoading((prev) => ({ ...prev, [userId]: true }));
     try {
+      const payload = isPendingRequest 
+        ? { request_id: userId }
+        : { user_id: userId };
+
       const res = await fetch("/api/admin/approve-user", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId }),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (json.error) throw new Error(json.error);
 
-      setProfiles((prev) =>
-        prev.map((p) => (p.id === userId ? { ...p, status: "approved" } : p))
-      );
+      if (isPendingRequest) {
+        // Remove from list (or refetch)
+        setProfiles((prev) => prev.filter((p) => p.id !== userId));
+      } else {
+        setProfiles((prev) =>
+          prev.map((p) => (p.id === userId ? { ...p, status: "approved" } : p))
+        );
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to approve user");
     } finally {
@@ -215,7 +224,7 @@ export default function UserManagementTable({ profiles: initialProfiles }: UserM
       case "Super-admin":
         return "bg-purple-100 text-purple-800";
       case "Admin":
-        return "bg-blue-100 text-blue-800";
+        return "bg-yellow-100 text-yellow-800";
       case "Security-team":
         return "bg-indigo-100 text-indigo-800";
       case "Client":
@@ -251,7 +260,7 @@ export default function UserManagementTable({ profiles: initialProfiles }: UserM
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2 border rounded-lg"
+          className="px-4 py-2 border rounded-lg bg-white"
         >
           <option value="all">All Statuses</option>
           <option value="pending">Pending</option>
@@ -261,7 +270,7 @@ export default function UserManagementTable({ profiles: initialProfiles }: UserM
         <select
           value={roleFilter}
           onChange={(e) => setRoleFilter(e.target.value)}
-          className="px-4 py-2 border rounded-lg"
+          className="px-4 py-2 border rounded-lg bg-white"
         >
           <option value="all">All Roles</option>
           <option value="Super-admin">Super-admin</option>
@@ -351,14 +360,14 @@ export default function UserManagementTable({ profiles: initialProfiles }: UserM
                           size="sm"
                           variant="default"
                           className="bg-green-600 hover:bg-green-700"
-                          onClick={() => handleApprove(profile.id)}
+                          onClick={() => handleApprove(profile.id, profile.isPendingRequest)}
                           disabled={loading[profile.id]}
                         >
                           <CheckCircle2 className="h-4 w-4 mr-1" />
-                          Approve
+                          {profile.isPendingRequest ? "Create Account" : "Approve"}
                         </Button>
                       )}
-                      {!profile.suspended ? (
+                      {!profile.isPendingRequest && !profile.suspended ? (
                         <Button
                           size="sm"
                           variant="destructive"
@@ -368,7 +377,7 @@ export default function UserManagementTable({ profiles: initialProfiles }: UserM
                           <Ban className="h-4 w-4 mr-1" />
                           Suspend
                         </Button>
-                      ) : (
+                      ) : !profile.isPendingRequest && profile.suspended ? (
                         <Button
                           size="sm"
                           variant="default"
@@ -379,7 +388,7 @@ export default function UserManagementTable({ profiles: initialProfiles }: UserM
                           <CheckCircle2 className="h-4 w-4 mr-1" />
                           Unsuspend
                         </Button>
-                      )}
+                      ) : null}
                     </div>
                   </td>
                 </tr>

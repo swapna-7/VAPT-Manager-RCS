@@ -30,9 +30,10 @@ export async function POST(req: Request) {
         const { data: { user }, error } = await supabase.auth.admin.getUserById(userId);
         if (!error && user?.email) {
           emails[userId] = user.email;
+
         }
       } catch (e) {
-        // Skip if user not found
+        console.error(`Error fetching user ${userId}:`, e);
       }
     }
 

@@ -341,7 +341,9 @@ export default function SecurityTeamUserPage({ params }: { params: Promise<{ id:
                             />
                             <div className="flex-1">
                               <span className="font-medium">Web Application PT</span>
-                              <Badge className="ml-2" variant="outline">{orgServices.web}</Badge>
+                              <Badge className="ml-2" variant="outline">
+                                {typeof orgServices.web === 'string' ? orgServices.web : orgServices.web?.tier || 'N/A'}
+                              </Badge>
                             </div>
                           </div>
                         )}
@@ -359,7 +361,9 @@ export default function SecurityTeamUserPage({ params }: { params: Promise<{ id:
                             />
                             <div className="flex-1">
                               <span className="font-medium">Android Application PT</span>
-                              <Badge className="ml-2" variant="outline">{orgServices.android}</Badge>
+                              <Badge className="ml-2" variant="outline">
+                                {typeof orgServices.android === 'string' ? orgServices.android : orgServices.android?.tier || 'N/A'}
+                              </Badge>
                             </div>
                           </div>
                         )}
@@ -377,7 +381,9 @@ export default function SecurityTeamUserPage({ params }: { params: Promise<{ id:
                             />
                             <div className="flex-1">
                               <span className="font-medium">iOS Application PT</span>
-                              <Badge className="ml-2" variant="outline">{orgServices.ios}</Badge>
+                              <Badge className="ml-2" variant="outline">
+                                {typeof orgServices.ios === 'string' ? orgServices.ios : orgServices.ios?.tier || 'N/A'}
+                              </Badge>
                             </div>
                           </div>
                         )}
@@ -473,17 +479,17 @@ export default function SecurityTeamUserPage({ params }: { params: Promise<{ id:
                       <div className="flex flex-wrap gap-1">
                         {assignment.services?.web && (
                           <Badge variant="outline" className="text-xs">
-                            Web ({assignment.services.web})
+                            Web ({typeof assignment.services.web === 'string' ? assignment.services.web : assignment.services.web?.tier || 'N/A'})
                           </Badge>
                         )}
                         {assignment.services?.android && (
                           <Badge variant="outline" className="text-xs">
-                            Android ({assignment.services.android})
+                            Android ({typeof assignment.services.android === 'string' ? assignment.services.android : assignment.services.android?.tier || 'N/A'})
                           </Badge>
                         )}
                         {assignment.services?.ios && (
                           <Badge variant="outline" className="text-xs">
-                            iOS ({assignment.services.ios})
+                            iOS ({typeof assignment.services.ios === 'string' ? assignment.services.ios : assignment.services.ios?.tier || 'N/A'})
                           </Badge>
                         )}
                         {!assignment.services?.web && !assignment.services?.android && !assignment.services?.ios && (

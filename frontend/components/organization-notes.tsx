@@ -38,11 +38,11 @@ export default function OrganizationNotes({ organizationId, initialNotes }: Orga
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         placeholder="Add notes about this organization..."
-        className="w-full min-h-[200px] p-3 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
+        className="w-full bg-white min-h-[200px] p-3 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
       />
       {error && <p className="text-sm text-red-500">{error}</p>}
-      <Button onClick={handleSave} disabled={saving} className="w-full">
-        <Save className="h-4 w-4 mr-2" />
+      <Button onClick={handleSave} disabled={saving} className="w-full bg-zinc-900">
+        <Save className="h-4 w-4 mr-2 " />
         {saving ? "Saving..." : "Save Notes"}
       </Button>
     </div>

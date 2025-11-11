@@ -21,6 +21,7 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string>("");
+  const [unreadCount, setUnreadCount] = useState<number>(0);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -31,6 +32,36 @@ export default function DashboardLayout({
       }
     };
     fetchUser();
+  }, []);
+
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        console.log("Fetching notifications for user:", user.id);
+        const { data: notifications, error } = await supabase
+          .from("notifications")
+          .select("id, read")
+          .or(`user_id.eq.${user.id},user_id.is.null`)
+          .eq("read", false);
+        
+        if (error) {
+          console.error("Error fetching notifications:", error);
+        } else {
+          console.log("Unread notifications:", notifications);
+          setUnreadCount(notifications?.length || 0);
+        }
+      }
+    };
+    
+    fetchUnreadCount();
+    
+    // Poll for updates every 30 seconds
+    const interval = setInterval(fetchUnreadCount, 30000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const handleLogout = async () => {
@@ -76,8 +107,18 @@ export default function DashboardLayout({
                           : "text-gray-700 hover:bg-gray-50"
                       }`}
                     >
-                      <Icon className="h-5 w-5" />
-                      <span className="font-medium">{item.label}</span>
+                      <div className="relative">
+                        <Icon className="h-5 w-5" />
+                        {item.label === "Notifications" && unreadCount > 0 && (
+                          <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+                        )}
+                      </div>
+                      <span className="font-medium flex-1">{item.label}</span>
+                      {item.label === "Notifications" && unreadCount > 0 && (
+                        <span className="bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center">
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 );

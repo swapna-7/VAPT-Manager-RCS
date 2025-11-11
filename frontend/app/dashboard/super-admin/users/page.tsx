@@ -44,17 +44,25 @@ export default async function UserManagementPage() {
     }
   }
 
+  // Fetch pending access requests
+  const { data: accessRequests } = await supabase
+    .from("user_access_requests")
+    .select("*")
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+
   // Fetch organizations separately and attach to profiles
   if (profiles && profiles.length > 0) {
-    const orgIds = profiles
-      .filter(p => p.organization_id)
-      .map(p => p.organization_id);
+    const allOrgIds = [
+      ...(profiles.filter(p => p.organization_id).map(p => p.organization_id)),
+      ...(accessRequests?.filter(r => r.organization_id).map(r => r.organization_id) || [])
+    ];
     
-    if (orgIds.length > 0) {
+    if (allOrgIds.length > 0) {
       const { data: organizations } = await supabase
         .from("organizations")
         .select("id, name")
-        .in("id", orgIds);
+        .in("id", allOrgIds);
       
       if (organizations) {
         // Create a map for quick lookup
@@ -67,6 +75,25 @@ export default async function UserManagementPage() {
             ? [orgMap.get(profile.organization_id)!]
             : null
         }));
+
+        // Convert access requests to profile format
+        const requestProfiles = (accessRequests || []).map(req => ({
+          id: req.id,
+          full_name: req.full_name,
+          role: req.role,
+          status: "pending" as const,
+          suspended: false,
+          created_at: req.created_at,
+          organization_id: req.organization_id,
+          organizations: req.organization_id && orgMap.has(req.organization_id)
+            ? [orgMap.get(req.organization_id)!]
+            : null,
+          isPendingRequest: true,
+          email: req.email,
+        }));
+
+        // Combine profiles and requests
+        profiles = [...profiles, ...requestProfiles];
       }
     }
   }

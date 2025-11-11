@@ -14,6 +14,12 @@ import Link from "next/link";
 interface Organization {
   id: string;
   name: string;
+  services: string[]; // Available services for this organization
+}
+
+interface AssignedService {
+  organization_id: string;
+  service: string;
 }
 
 export default function NewSubmissionPage() {
@@ -22,16 +28,22 @@ export default function NewSubmissionPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [availableServices, setAvailableServices] = useState<string[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   const [formData, setFormData] = useState({
     organization_id: "",
+    service_type: "",
     title: "",
     description: "",
+    poc: "",
+    instances: "",
+    remediation: "",
+    cwe_id: "",
     severity: "Medium",
     cvss_score: "",
     affected_systems: "",
-    remediation: ""
+    security_team_comments: ""
   });
 
   useEffect(() => {
@@ -62,11 +74,12 @@ export default function NewSubmissionPage() {
         return;
       }
 
-      // Fetch assigned organizations
+      // Fetch assigned organizations with their services
       const { data: assignments, error } = await supabase
         .from("security_team_organizations")
         .select(`
           organization_id,
+          services,
           organizations!inner (
             id,
             name
@@ -75,10 +88,37 @@ export default function NewSubmissionPage() {
         .eq("security_team_user_id", user.id);
 
       if (!error && assignments) {
-        const orgs = assignments.map((item: any) => ({
-          id: item.organization_id,
-          name: Array.isArray(item.organizations) ? item.organizations[0].name : item.organizations.name
-        }));
+        // Group services by organization
+        const orgMap = new Map<string, { id: string; name: string; services: string[] }>();
+        
+        assignments.forEach((item: any) => {
+          const orgId = item.organization_id;
+          const orgName = Array.isArray(item.organizations) ? item.organizations[0].name : item.organizations.name;
+          
+          if (!orgMap.has(orgId)) {
+            orgMap.set(orgId, {
+              id: orgId,
+              name: orgName,
+              services: []
+            });
+          }
+          
+          // Extract service types from the services JSONB
+          if (item.services) {
+            const serviceKeys = Object.keys(item.services);
+            serviceKeys.forEach(key => {
+              const org = orgMap.get(orgId)!;
+              const serviceLabel = key === 'web' ? 'Web Application PT' :
+                                  key === 'android' ? 'Android Application PT' :
+                                  key === 'ios' ? 'iOS Application PT' : key;
+              if (!org.services.includes(serviceLabel)) {
+                org.services.push(serviceLabel);
+              }
+            });
+          }
+        });
+        
+        const orgs = Array.from(orgMap.values());
         setOrganizations(orgs);
       }
     } catch (error) {
@@ -98,20 +138,32 @@ export default function NewSubmissionPage() {
       alert("Please select an organization");
       return;
     }
+    if (!formData.service_type) {
+      alert("Please select a service type");
+      return;
+    }
     if (!formData.title.trim()) {
-      alert("Please enter a title");
+      alert("Please enter a finding/title");
       return;
     }
     if (!formData.description.trim()) {
       alert("Please enter a description");
       return;
     }
-    if (!formData.affected_systems.trim()) {
-      alert("Please enter affected systems");
+    if (!formData.poc.trim()) {
+      alert("Please enter POC (Proof of Concept)");
+      return;
+    }
+    if (!formData.instances.trim()) {
+      alert("Please enter instances");
       return;
     }
     if (!formData.remediation.trim()) {
-      alert("Please enter remediation steps");
+      alert("Please enter countermeasures/remediation");
+      return;
+    }
+    if (!formData.cwe_id.trim()) {
+      alert("Please enter CWE ID");
       return;
     }
 
@@ -123,12 +175,17 @@ export default function NewSubmissionPage() {
         .insert({
           organization_id: formData.organization_id,
           submitted_by: currentUser.id,
+          service_type: formData.service_type,
           title: formData.title.trim(),
           description: formData.description.trim(),
+          poc: formData.poc.trim(),
+          instances: formData.instances.trim(),
           severity: formData.severity,
           cvss_score: formData.cvss_score ? parseFloat(formData.cvss_score) : null,
-          affected_systems: formData.affected_systems.trim(),
+          cwe_id: formData.cwe_id.trim(),
+          affected_systems: formData.affected_systems.trim() || "N/A",
           remediation: formData.remediation.trim(),
+          security_team_comments: formData.security_team_comments.trim() || null,
           status: "pending"
         });
 
@@ -150,6 +207,17 @@ export default function NewSubmissionPage() {
 
   const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    
+    // Update available services when organization changes
+    if (field === "organization_id") {
+      const selectedOrg = organizations.find(org => org.id === value);
+      if (selectedOrg) {
+        setAvailableServices(selectedOrg.services);
+        setFormData(prev => ({ ...prev, service_type: "" })); // Reset service selection
+      } else {
+        setAvailableServices([]);
+      }
+    }
   };
 
   if (loading) {
@@ -223,7 +291,7 @@ export default function NewSubmissionPage() {
                 id="organization"
                 value={formData.organization_id}
                 onChange={(e) => handleChange("organization_id", e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full px-3 py-2 bg-slate-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                 required
               >
                 <option value="">Select an organization...</option>
@@ -235,14 +303,38 @@ export default function NewSubmissionPage() {
               </select>
             </div>
 
-            {/* Title */}
+            {/* Service Type Selection */}
+            {formData.organization_id && (
+              <div className="space-y-2">
+                <Label htmlFor="service_type">Service Type *</Label>
+                <select
+                  id="service_type"
+                  value={formData.service_type}
+                  onChange={(e) => handleChange("service_type", e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  required
+                >
+                  <option value="">Select a service...</option>
+                  {availableServices.map((service) => (
+                    <option key={service} value={service}>
+                      {service}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-sm text-gray-500">
+                  Select which service this vulnerability relates to
+                </p>
+              </div>
+            )}
+
+            {/* Title / Finding */}
             <div className="space-y-2">
-              <Label htmlFor="title">Vulnerability Title *</Label>
+              <Label htmlFor="title">Finding *</Label>
               <Input
                 id="title"
                 value={formData.title}
                 onChange={(e) => handleChange("title", e.target.value)}
-                placeholder="e.g., SQL Injection in Login Form"
+                placeholder="e.g., Clickjacking"
                 required
               />
             </div>
@@ -254,13 +346,42 @@ export default function NewSubmissionPage() {
                 id="description"
                 value={formData.description}
                 onChange={(e) => handleChange("description", e.target.value)}
-                placeholder="Detailed description of the vulnerability, including how it was discovered and potential impact..."
+                placeholder="Detailed technical description of the vulnerability"
                 rows={6}
                 required
               />
             </div>
 
-            {/* Severity and CVSS Score */}
+            {/* Proof of Concept (POC) */}
+            <div className="space-y-2">
+              <Label htmlFor="poc">Proof of Concept (POC) *</Label>
+              <Input
+                id="poc"
+                type="url"
+                value={formData.poc}
+                onChange={(e) => handleChange("poc", e.target.value)}
+                placeholder="Link to POC demonstration"
+                required
+              />
+            </div>
+
+            {/* Instances */}
+            <div className="space-y-2">
+              <Label htmlFor="instances">Instances *</Label>
+              <Textarea
+                id="instances"
+                value={formData.instances}
+                onChange={(e) => handleChange("instances", e.target.value)}
+                placeholder="List all instances where this vulnerability was found&#10;Example:&#10;- https://example.com/admin/dashboard&#10;- https://example.com/user/profile&#10;- Mobile app settings page"
+                rows={6}
+                required
+              />
+              <p className="text-sm text-gray-500">
+                Provide URLs, page names, or locations where this vulnerability exists
+              </p>
+            </div>
+
+            {/* Severity and CWE ID */}
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="severity">Severity *</Label>
@@ -268,7 +389,7 @@ export default function NewSubmissionPage() {
                   id="severity"
                   value={formData.severity}
                   onChange={(e) => handleChange("severity", e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                   required
                 >
                   <option value="Critical">Critical</option>
@@ -280,44 +401,70 @@ export default function NewSubmissionPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="cvss_score">CVSS Score (0-10)</Label>
+                <Label htmlFor="cwe_id">CWE ID *</Label>
                 <Input
-                  id="cvss_score"
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="10"
-                  value={formData.cvss_score}
-                  onChange={(e) => handleChange("cvss_score", e.target.value)}
-                  placeholder="e.g., 7.5"
+                  id="cwe_id"
+                  value={formData.cwe_id}
+                  onChange={(e) => handleChange("cwe_id", e.target.value)}
+                  placeholder="e.g., CWE-1021"
+                  required
                 />
               </div>
             </div>
 
+            {/* CVSS Score */}
+            <div className="space-y-2">
+              <Label htmlFor="cvss_score">CVSS Score (CVSS v3.1)</Label>
+              <Input
+                id="cvss_score"
+                type="number"
+                step="0.1"
+                min="0"
+                max="10"
+                value={formData.cvss_score}
+                onChange={(e) => handleChange("cvss_score", e.target.value)}
+                placeholder="e.g., 7.5"
+              />
+            </div>
+
             {/* Affected Systems */}
             <div className="space-y-2">
-              <Label htmlFor="affected_systems">Affected Systems *</Label>
+              <Label htmlFor="affected_systems">Affected Systems</Label>
               <Textarea
                 id="affected_systems"
                 value={formData.affected_systems}
                 onChange={(e) => handleChange("affected_systems", e.target.value)}
                 placeholder="List all affected systems, URLs, applications, or components..."
                 rows={4}
-                required
               />
             </div>
 
-            {/* Remediation */}
+            {/* Countermeasures / Remediation */}
             <div className="space-y-2">
-              <Label htmlFor="remediation">Remediation Steps *</Label>
+              <Label htmlFor="remediation">Countermeasures / Remediation *</Label>
               <Textarea
                 id="remediation"
                 value={formData.remediation}
                 onChange={(e) => handleChange("remediation", e.target.value)}
-                placeholder="Provide detailed steps to fix or mitigate this vulnerability..."
+                placeholder="Recommended security measures and remediation steps"
                 rows={6}
                 required
               />
+            </div>
+
+            {/* Comments */}
+            <div className="space-y-2">
+              <Label htmlFor="security_team_comments">Comments</Label>
+              <Textarea
+                id="security_team_comments"
+                value={formData.security_team_comments}
+                onChange={(e) => handleChange("security_team_comments", e.target.value)}
+                placeholder="Additional comments or notes"
+                rows={3}
+              />
+              <p className="text-sm text-gray-500">
+                Comments are visible to Admin, Security Team, and Client
+              </p>
             </div>
 
             {/* Submit Button */}

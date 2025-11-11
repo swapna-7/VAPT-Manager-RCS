@@ -1,9 +1,13 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Eye, Clock, CheckCircle, XCircle, Building2 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { AlertTriangle, Eye, Clock, CheckCircle, XCircle, Building2, Loader2 } from "lucide-react";
 import Link from "next/link";
 
 interface Vulnerability {
@@ -20,106 +24,91 @@ interface Vulnerability {
   };
 }
 
-export default async function AdminVulnerabilitiesPage() {
-  const supabase = await createClient();
+export default function AdminVulnerabilitiesPage() {
+  const router = useRouter();
+  const supabase = createClient();
+  const [loading, setLoading] = useState(true);
+  const [vulnerabilities, setVulnerabilities] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState("pending");
 
-  // Get the authenticated user
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  useEffect(() => {
+    loadVulnerabilities();
+  }, []);
 
-  if (!user) {
-    redirect("/auth/login");
-  }
+  const loadVulnerabilities = async () => {
+    try {
+      setLoading(true);
 
-  // Verify user is admin
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+      const { data: { user } } = await supabase.auth.getUser();
 
-  if (!profile || profile.role !== "Admin") {
-    redirect("/dashboard/admin");
-  }
+      if (!user) {
+        router.push("/auth/login");
+        return;
+      }
 
-  // Fetch all vulnerabilities
-  const { data: vulnerabilities } = await supabase
-    .from("vulnerabilities")
-    .select(`
-      id,
-      title,
-      severity,
-      status,
-      created_at,
-      organizations!inner (
-        name
-      ),
-      profiles!vulnerabilities_submitted_by_fkey (
-        full_name
-      )
-    `)
-    .order("created_at", { ascending: false });
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
 
-  // Transform data
-  const transformedVulns = (vulnerabilities || []).map((item: any) => ({
-    ...item,
-    organizations: Array.isArray(item.organizations) ? item.organizations[0] : item.organizations,
-    profiles: Array.isArray(item.profiles) ? item.profiles[0] : item.profiles
-  }));
+      if (!profile || profile.role !== "Admin") {
+        router.push("/dashboard/admin");
+        return;
+      }
+
+      // Fetch all vulnerabilities
+      const { data: vulnsData } = await supabase
+        .from("vulnerabilities")
+        .select(`
+          id,
+          title,
+          severity,
+          status,
+          created_at,
+          organizations!inner (
+            name
+          ),
+          profiles!vulnerabilities_submitted_by_fkey (
+            full_name
+          )
+        `)
+        .order("created_at", { ascending: false });
+
+      const transformed = (vulnsData || []).map((item: any) => ({
+        ...item,
+        organizations: Array.isArray(item.organizations) ? item.organizations[0] : item.organizations,
+        profiles: Array.isArray(item.profiles) ? item.profiles[0] : item.profiles
+      }));
+
+      setVulnerabilities(transformed);
+    } catch (error) {
+      console.error("Error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Calculate counts
-  const pendingCount = transformedVulns.filter((v: Vulnerability) => v.status === "pending").length;
-  const approvedCount = transformedVulns.filter((v: Vulnerability) => v.status === "approved").length;
-  const rejectedCount = transformedVulns.filter((v: Vulnerability) => v.status === "rejected").length;
+  const pendingCount = vulnerabilities.filter((v: any) => v.status === "pending").length;
+  const approvedCount = vulnerabilities.filter((v: any) => v.status === "approved").length;
+  const rejectedCount = vulnerabilities.filter((v: any) => v.status === "rejected").length;
 
-  // Get pending vulnerabilities first
-  const pendingVulns = transformedVulns.filter((v: Vulnerability) => v.status === "pending");
-  const otherVulns = transformedVulns.filter((v: Vulnerability) => v.status !== "pending");
-  const sortedVulns = [...pendingVulns, ...otherVulns];
+  // Filter based on active tab
+  const filteredVulnerabilities = vulnerabilities.filter((v: any) => {
+    if (activeTab === "pending") return v.status === "pending";
+    if (activeTab === "approved") return v.status === "approved";
+    if (activeTab === "rejected") return v.status === "rejected";
+    return true;
+  });
 
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case "Critical":
-        return "bg-red-100 text-red-800";
-      case "High":
-        return "bg-orange-100 text-orange-800";
-      case "Medium":
-        return "bg-yellow-100 text-yellow-800";
-      case "Low":
-        return "bg-blue-100 text-blue-800";
-      case "Informational":
-        return "bg-gray-100 text-gray-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "approved":
-        return "bg-green-100 text-green-800";
-      case "pending":
-        return "bg-yellow-100 text-yellow-800";
-      case "rejected":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "approved":
-        return <CheckCircle className="h-4 w-4" />;
-      case "pending":
-        return <Clock className="h-4 w-4" />;
-      case "rejected":
-        return <XCircle className="h-4 w-4" />;
-      default:
-        return null;
-    }
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -170,124 +159,156 @@ export default async function AdminVulnerabilitiesPage() {
         </Card>
       </div>
 
-      {/* Vulnerabilities List */}
-      {sortedVulns.length === 0 ? (
+      {/* Vulnerabilities List with Tabs */}
+      <Tabs defaultValue="pending" onValueChange={setActiveTab}>
         <Card>
-          <CardContent className="py-12">
-            <div className="text-center">
-              <AlertTriangle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">No vulnerability submissions yet</p>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Vulnerability Submissions</CardTitle>
+              <TabsList>
+                <TabsTrigger value="pending">
+                  Pending Review ({pendingCount})
+                </TabsTrigger>
+                <TabsTrigger value="approved">
+                  Approved ({approvedCount})
+                </TabsTrigger>
+                <TabsTrigger value="rejected">
+                  Rejected ({rejectedCount})
+                </TabsTrigger>
+              </TabsList>
             </div>
+          </CardHeader>
+          <CardContent>
+            <TabsContent value="pending">
+              <VulnerabilityList 
+                vulnerabilities={filteredVulnerabilities} 
+                emptyMessage="No pending vulnerabilities to review"
+                showReviewButton={true}
+              />
+            </TabsContent>
+            <TabsContent value="approved">
+              <VulnerabilityList 
+                vulnerabilities={filteredVulnerabilities} 
+                emptyMessage="No approved vulnerabilities"
+                showReviewButton={false}
+              />
+            </TabsContent>
+            <TabsContent value="rejected">
+              <VulnerabilityList 
+                vulnerabilities={filteredVulnerabilities} 
+                emptyMessage="No rejected vulnerabilities"
+                showReviewButton={false}
+              />
+            </TabsContent>
           </CardContent>
         </Card>
-      ) : (
-        <div className="space-y-4">
-          {pendingCount > 0 && (
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Clock className="h-5 w-5 text-yellow-600" />
-                Pending Review ({pendingCount})
-              </h2>
-              <div className="space-y-3">
-                {pendingVulns.map((vuln: Vulnerability) => (
-                  <Card key={vuln.id} className="border-yellow-200 hover:shadow-md transition-shadow">
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="text-lg font-semibold text-gray-900">
-                              {vuln.title}
-                            </h3>
-                            <Badge className={getSeverityColor(vuln.severity)}>
-                              {vuln.severity}
-                            </Badge>
-                            <Badge className={getStatusColor(vuln.status)}>
-                              <span className="flex items-center gap-1">
-                                {getStatusIcon(vuln.status)}
-                                Pending
-                              </span>
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-gray-600">
-                            <span className="flex items-center gap-1">
-                              <Building2 className="h-4 w-4" />
-                              {vuln.organizations.name}
-                            </span>
-                            <span>
-                              Submitted by: {vuln.profiles?.full_name || "Unknown"}
-                            </span>
-                            <span>
-                              {new Date(vuln.created_at).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </div>
-                        <Link href={`/dashboard/admin/vulnerabilities/${vuln.id}`}>
-                          <Button className="bg-purple-600 hover:bg-purple-700">
-                            <Eye className="h-4 w-4 mr-1" />
-                            Review
-                          </Button>
-                        </Link>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
+      </Tabs>
+    </div>
+  );
+}
 
-          {otherVulns.length > 0 && (
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                All Submissions
-              </h2>
-              <div className="space-y-3">
-                {otherVulns.map((vuln: Vulnerability) => (
-                  <Card key={vuln.id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="text-lg font-semibold text-gray-900">
-                              {vuln.title}
-                            </h3>
-                            <Badge className={getSeverityColor(vuln.severity)}>
-                              {vuln.severity}
-                            </Badge>
-                            <Badge className={getStatusColor(vuln.status)}>
-                              <span className="flex items-center gap-1">
-                                {getStatusIcon(vuln.status)}
-                                {vuln.status.charAt(0).toUpperCase() + vuln.status.slice(1)}
-                              </span>
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-gray-600">
-                            <span className="flex items-center gap-1">
-                              <Building2 className="h-4 w-4" />
-                              {vuln.organizations.name}
-                            </span>
-                            <span>
-                              Submitted by: {vuln.profiles?.full_name || "Unknown"}
-                            </span>
-                            <span>
-                              {new Date(vuln.created_at).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </div>
-                        <Link href={`/dashboard/admin/vulnerabilities/${vuln.id}`}>
-                          <Button variant="outline" size="sm">
-                            <Eye className="h-4 w-4 mr-1" />
-                            View
-                          </Button>
-                        </Link>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+// Vulnerability List Component
+function VulnerabilityList({ 
+  vulnerabilities, 
+  emptyMessage,
+  showReviewButton 
+}: { 
+  vulnerabilities: any[]; 
+  emptyMessage: string;
+  showReviewButton: boolean;
+}) {
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case "Critical": return "bg-red-100 text-red-800";
+      case "High": return "bg-orange-100 text-orange-800";
+      case "Medium": return "bg-yellow-100 text-yellow-800";
+      case "Low": return "bg-blue-100 text-blue-800";
+      case "Informational": return "bg-gray-100 text-gray-800";
+      default: return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "approved": return "bg-green-100 text-green-800";
+      case "pending": return "bg-yellow-100 text-yellow-800";
+      case "rejected": return "bg-red-100 text-red-800";
+      default: return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "approved": return <CheckCircle className="h-4 w-4" />;
+      case "pending": return <Clock className="h-4 w-4" />;
+      case "rejected": return <XCircle className="h-4 w-4" />;
+      default: return null;
+    }
+  };
+
+  if (vulnerabilities.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <AlertTriangle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <p className="text-gray-600">{emptyMessage}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {vulnerabilities.map((vuln: any) => (
+        <div 
+          key={vuln.id} 
+          className={`border rounded-lg p-4 hover:border-purple-300 transition-colors ${
+            vuln.status === "pending" ? "border-yellow-200 bg-yellow-50/30" : "border-gray-200"
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {vuln.title}
+                </h3>
+                <Badge className={getSeverityColor(vuln.severity)}>
+                  {vuln.severity}
+                </Badge>
+                <Badge className={getStatusColor(vuln.status)}>
+                  <span className="flex items-center gap-1">
+                    {getStatusIcon(vuln.status)}
+                    {vuln.status.charAt(0).toUpperCase() + vuln.status.slice(1)}
+                  </span>
+                </Badge>
+              </div>
+              <div className="flex items-center gap-4 text-sm text-gray-600">
+                <span className="flex items-center gap-1">
+                  <Building2 className="h-4 w-4" />
+                  {vuln.organizations.name}
+                </span>
+                <span>
+                  Submitted by: {vuln.profiles?.full_name || "Unknown"}
+                </span>
+                <span>
+                  {new Date(vuln.created_at).toLocaleDateString()}
+                </span>
               </div>
             </div>
-          )}
+            <Link href={`/dashboard/admin/vulnerabilities/${vuln.id}`}>
+              {showReviewButton ? (
+                <Button className="bg-purple-600 hover:bg-purple-700">
+                  <Eye className="h-4 w-4 mr-1" />
+                  Review
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm">
+                  <Eye className="h-4 w-4 mr-1" />
+                  View
+                </Button>
+              )}
+            </Link>
+          </div>
         </div>
-      )}
+      ))}
     </div>
   );
 }

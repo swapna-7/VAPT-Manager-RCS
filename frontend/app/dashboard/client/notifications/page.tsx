@@ -1,10 +1,13 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import DashboardLayout from "@/components/dashboard-client";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Clock, AlertTriangle, XCircle } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { CheckCircle2, Clock, AlertTriangle, XCircle, Loader2 } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
 import Link from "next/link";
 
@@ -16,84 +19,224 @@ interface Notification {
   created_at: string;
 }
 
-export default async function ClientNotificationsPage() {
-  const supabase = await createClient();
+export default function ClientNotificationsPage() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [activeTab, setActiveTab] = useState("unread");
+  const [userId, setUserId] = useState<string>("");
+  const [migrationNeeded, setMigrationNeeded] = useState(false);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  useEffect(() => {
+    loadNotifications();
+  }, []);
 
-  if (!user) {
-    return redirect("/auth/login");
+  async function loadNotifications() {
+    const supabase = createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      router.push("/auth/login");
+      return;
+    }
+
+    setUserId(user.id);
+
+    // Check if user is client
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (profile?.role !== "Client") {
+      router.push("/dashboard");
+      return;
+    }
+
+    // Fetch notifications for this client
+    const { data: notificationsData, error } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching notifications:", error);
+      const migrationError = error && (error as any).code === '42703';
+      setMigrationNeeded(migrationError);
+    } else {
+      setNotifications(notificationsData || []);
+    }
+
+    setLoading(false);
   }
 
-  // Check if user is client
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (profile?.role !== "Client") {
-    return redirect("/dashboard");
+  async function markAsRead(notificationId: string) {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("notifications")
+      .update({ read: true })
+      .eq("id", notificationId)
+      .select();
+    
+    if (error) {
+      console.error("Error marking notification as read:", error);
+      alert("Failed to mark notification as read. Please check console for details.");
+      return;
+    }
+    
+    console.log("Notification marked as read:", data);
+    
+    // Update local state immediately for better UX
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
+    );
   }
 
-  // Fetch notifications for this client
-  const { data: notifications, error } = await supabase
-    .from("notifications")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+  // Filter notifications based on active tab
+  const filteredNotifications = notifications.filter((n) => {
+    if (activeTab === "unread") return !n.read;
+    if (activeTab === "read") return n.read;
+    return true;
+  });
 
-  if (error) {
-    console.error("Error fetching notifications:", error);
+  // Calculate counts
+  const unreadCount = notifications.filter((n) => !n.read).length;
+  const readCount = notifications.filter((n) => n.read).length;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+      </div>
+    );
   }
-
-  const notificationsList = notifications || [];
-  const unreadCount = notificationsList.filter((n) => !n.read).length;
 
   return (
-    <DashboardLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Notifications</h1>
-            <p className="text-gray-500 mt-1">Track vulnerabilities and verification updates</p>
-          </div>
-          {unreadCount > 0 && (
-            <Badge variant="default" className="text-lg px-4 py-2">
-              {unreadCount} Unread
-            </Badge>
-          )}
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Notifications</h1>
+          <p className="text-gray-500 mt-1">Track vulnerabilities and verification updates</p>
         </div>
+      </div>
 
-        {notificationsList.length === 0 ? (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <div className="flex flex-col items-center gap-4">
-                <AlertTriangle className="h-16 w-16 text-gray-300" />
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900">No notifications yet</h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    You'll receive notifications about vulnerabilities assigned to you
-                  </p>
+      {migrationNeeded && (
+        <Card className="border-red-300 bg-red-50">
+          <CardContent className="p-6">
+            <div className="flex items-start gap-4">
+              <XCircle className="h-6 w-6 text-red-600 flex-shrink-0 mt-1" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-red-900 text-lg">Database Migration Required</h3>
+                <p className="text-red-700 mt-2">
+                  The notifications system requires a database migration to be run.
+                </p>
+                <div className="mt-4 p-4 bg-white rounded border border-red-200">
+                  <p className="font-medium text-gray-900 mb-2">Steps to fix:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
+                    <li>Open your Supabase Dashboard SQL Editor</li>
+                    <li>Navigate to the project root folder</li>
+                    <li>Open and execute <code className="bg-gray-100 px-1 rounded">NOTIFICATIONS_MIGRATION.sql</code></li>
+                    <li>Wait 10-15 seconds for schema cache to refresh</li>
+                    <li>Refresh this page</li>
+                  </ol>
                 </div>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!migrationNeeded && (
+        <Tabs defaultValue="unread" onValueChange={setActiveTab}>
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>My Notifications</CardTitle>
+                <TabsList>
+                  <TabsTrigger value="unread">
+                    Unread ({unreadCount})
+                  </TabsTrigger>
+                  <TabsTrigger value="read">
+                    Read ({readCount})
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <TabsContent value="unread">
+                <NotificationList 
+                  notifications={filteredNotifications} 
+                  emptyMessage="No unread notifications"
+                  userId={userId}
+                  onMarkAsRead={markAsRead}
+                />
+              </TabsContent>
+              <TabsContent value="read">
+                <NotificationList 
+                  notifications={filteredNotifications} 
+                  emptyMessage="No read notifications"
+                  userId={userId}
+                  onMarkAsRead={markAsRead}
+                />
+              </TabsContent>
             </CardContent>
           </Card>
-        ) : (
-          <div className="space-y-4">
-            {notificationsList.map((notification) => (
-              <NotificationCard key={notification.id} notification={notification} userId={user.id} />
-            ))}
-          </div>
-        )}
-      </div>
-    </DashboardLayout>
+        </Tabs>
+      )}
+    </div>
   );
 }
 
-async function NotificationCard({ notification, userId }: { notification: Notification; userId: string }) {
+// Notification List Component
+function NotificationList({ 
+  notifications, 
+  emptyMessage,
+  userId,
+  onMarkAsRead
+}: { 
+  notifications: Notification[]; 
+  emptyMessage: string;
+  userId: string;
+  onMarkAsRead: (id: string) => void;
+}) {
+  if (notifications.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <AlertTriangle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <p className="text-gray-600">{emptyMessage}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {notifications.map((notification) => (
+        <NotificationCard 
+          key={notification.id} 
+          notification={notification} 
+          userId={userId} 
+          onMarkAsRead={onMarkAsRead}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Notification Card Component
+function NotificationCard({ 
+  notification, 
+  userId,
+  onMarkAsRead 
+}: { 
+  notification: Notification; 
+  userId: string;
+  onMarkAsRead: (id: string) => void;
+}) {
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case "vulnerability_assigned":
@@ -235,34 +378,27 @@ async function NotificationCard({ notification, userId }: { notification: Notifi
   };
 
   return (
-    <Card className={notification.read ? "bg-white" : "bg-blue-50 border-blue-200"}>
-      <CardContent className="p-4">
-        <div className="flex items-start gap-4">
-          <div className="flex-shrink-0 mt-1">
-            {getNotificationIcon(notification.type)}
-          </div>
-          <div className="flex-1 min-w-0">
-            {getNotificationMessage(notification)}
-            <p className="text-xs text-gray-400 mt-2">
-              {formatDateTime(notification.created_at)}
-            </p>
-          </div>
-          {!notification.read && (
-            <form action={async () => {
-              "use server";
-              const supabase = await createClient();
-              await supabase
-                .from("notifications")
-                .update({ read: true })
-                .eq("id", notification.id);
-            }}>
-              <Button type="submit" variant="ghost" size="sm">
-                Mark as read
-              </Button>
-            </form>
-          )}
+    <div className={`border rounded-lg p-4 ${notification.read ? "bg-white border-gray-200" : "bg-blue-50 border-blue-200"}`}>
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 mt-1">
+          {getNotificationIcon(notification.type)}
         </div>
-      </CardContent>
-    </Card>
+        <div className="flex-1 min-w-0">
+          {getNotificationMessage(notification)}
+          <p className="text-xs text-gray-400 mt-2">
+            {formatDateTime(notification.created_at)}
+          </p>
+        </div>
+        {!notification.read && (
+          <Button 
+            onClick={() => onMarkAsRead(notification.id)} 
+            variant="ghost" 
+            size="sm"
+          >
+            Mark as read
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }

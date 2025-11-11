@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Shield, ArrowLeft, Building2, Mail, Phone, MapPin, Lock, CheckCircle } from "lucide-react";
 
 type ServicesState = {
   web?: "Standard" | "Essential" | null;
@@ -184,7 +184,7 @@ export function ClientSignUpForm({
 
       const organizationId = orgData?.id;
 
-      // Create notifications for super admin approval
+      // Create notifications for admin/super-admin approval
       const notifications = [
         {
           type: "organization_signup",
@@ -216,9 +216,23 @@ export function ClientSignUpForm({
           actor_id: null,
           payload: {
             organization_id: organizationId,
-            users: validUsers, // Now includes name, email, and role
+            users: validUsers, // Includes name, email, and role
             password: password,
             requested_by: contactEmail,
+            services: {
+              web: services.web ? {
+                tier: services.web,
+                details: webDetails
+              } : null,
+              android: services.android ? {
+                tier: services.android,
+                details: androidDetails
+              } : null,
+              ios: services.ios ? {
+                tier: services.ios,
+                details: iosDetails
+              } : null,
+            }
           } as any,
         },
       ];
@@ -240,36 +254,98 @@ export function ClientSignUpForm({
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Client Organisation Sign up</CardTitle>
-          <CardDescription>Register your organisation and required services</CardDescription>
+      <Card className="w-full max-w-5xl mx-auto overflow-hidden shadow-2xl border-0">
+        <CardHeader className="bg-purple-600 p-8 text-center relative overflow-hidden">
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iYSIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVHJhbnNmb3JtPSJyb3RhdGUoNDUpIj48cGF0aCBkPSJNLTEwIDMwaDYwIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMC4yIiBvcGFjaXR5PSIwLjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjYSkiLz48L3N2Zz4=')] opacity-30"></div>
+          
+          <div className="relative z-10">
+            <Link 
+              href="/" 
+              className="inline-flex items-center gap-2 text-sm text-white/90 hover:text-white transition-colors mb-4 group"
+            >
+              <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
+              Back to Home
+            </Link>
+       
+            
+            <CardTitle className="text-3xl font-bold text-white mb-2">
+              Client Organization Sign Up
+            </CardTitle>
+            <CardDescription className="text-purple-100 text-base">
+              Register your organization and required security services
+            </CardDescription>
+          </div>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSignUp} className="flex flex-col gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="org-name">Organisation name</Label>
-              <Input id="org-name" required value={orgName} onChange={(e) => setOrgName(e.target.value)} />
+        <CardContent className="p-8">
+          <form onSubmit={handleSignUp} className="flex flex-col gap-6">
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Organization Details</h3>
+              
+              <div className="grid gap-2">
+                <Label htmlFor="org-name" className="text-sm font-medium text-gray-700">Organization Name *</Label>
+                <div className="relative">
+                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <Input 
+                    id="org-name" 
+                    required 
+                    value={orgName} 
+                    onChange={(e) => setOrgName(e.target.value)}
+                    className="pl-10 h-12 border-gray-300 focus:border-purple-500 focus:ring-purple-500"
+                    placeholder="Your Company Name"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="contact-email" className="text-sm font-medium text-gray-700">Contact Email *</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <Input 
+                    id="contact-email" 
+                    type="email" 
+                    required 
+                    value={contactEmail} 
+                    onChange={(e) => setContactEmail(e.target.value)}
+                    className="pl-10 h-12 border-gray-300 focus:border-purple-500 focus:ring-purple-500"
+                    placeholder="contact@company.com"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="contact-phone" className="text-sm font-medium text-gray-700">Contact Phone</Label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <Input 
+                    id="contact-phone" 
+                    value={contactPhone} 
+                    onChange={(e) => setContactPhone(e.target.value)}
+                    className="pl-10 h-12 border-gray-300 focus:border-purple-500 focus:ring-purple-500"
+                    placeholder="+1 (555) 123-4567"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="address" className="text-sm font-medium text-gray-700">Address</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                  <Textarea
+                    id="address" 
+                    value={address} 
+                    onChange={(e) => setAddress(e.target.value)}
+                    className="pl-10 border-gray-300 focus:border-purple-500 focus:ring-purple-500 resize-none"
+                    placeholder="123 Main St, City, State, ZIP"
+                    rows={3}
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="contact-email">Contact email</Label>
-              <Input id="contact-email" type="email" required value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="contact-phone">Contact phone</Label>
-              <Input id="contact-phone" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="address">Address</Label>
-              <Input id="address" value={address} onChange={(e) => setAddress(e.target.value)} />
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Services required (Select multiple)</Label>
-              <div className="flex flex-col gap-4 p-4 border rounded-lg bg-gray-50">
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Security Services</h3>
+              <Label className="text-sm text-gray-600">Select required services (one or more)</Label>
+              <div className="flex flex-col gap-4 p-6 border-2 border-gray-200 rounded-xl bg-gradient-to-br from-gray-50 to-white">
                 {/* Web Application PT */}
                 <div className="border bg-white p-4 rounded-lg">
                   <div className="flex items-center gap-2 mb-3">
@@ -305,7 +381,7 @@ export function ClientSignUpForm({
                   </div>
                   
                   {services.web && (
-                    <div className="ml-6 space-y-3 mt-3 p-3 bg-blue-50 rounded border border-blue-200">
+                    <div className="ml-6 space-y-3 mt-3 p-3 bg-blue-50 rounded border border-blue-200 ">
                       <div className="grid gap-2">
                         <Label htmlFor="web-scope-url" className="text-sm font-medium">Scope URL (Staging Environment) *</Label>
                         <Input
@@ -326,7 +402,7 @@ export function ClientSignUpForm({
                           required={!!services.web}
                           value={webDetails.userMatrix}
                           onChange={(e) => setWebDetails({...webDetails, userMatrix: e.target.value})}
-                          className="resize-none"
+                          className=""
                         />
                         <p className="text-xs text-gray-600">Describe all user roles and their access levels</p>
                       </div>
@@ -339,7 +415,7 @@ export function ClientSignUpForm({
                           required={!!services.web}
                           value={webDetails.credentials}
                           onChange={(e) => setWebDetails({...webDetails, credentials: e.target.value})}
-                          className="resize-none"
+                          className=""
                         />
                         <p className="text-xs text-gray-600">List all test credentials for different user roles</p>
                       </div>
@@ -416,7 +492,7 @@ export function ClientSignUpForm({
                           required={!!services.android}
                           value={androidDetails.userMatrix}
                           onChange={(e) => setAndroidDetails({...androidDetails, userMatrix: e.target.value})}
-                          className="resize-none"
+                          className=""
                         />
                       </div>
                       <div className="grid gap-2">
@@ -428,7 +504,7 @@ export function ClientSignUpForm({
                           required={!!services.android}
                           value={androidDetails.credentials}
                           onChange={(e) => setAndroidDetails({...androidDetails, credentials: e.target.value})}
-                          className="resize-none"
+                          className=""
                         />
                       </div>
                     </div>
@@ -516,7 +592,7 @@ export function ClientSignUpForm({
                           required={!!services.ios}
                           value={iosDetails.userMatrix}
                           onChange={(e) => setIosDetails({...iosDetails, userMatrix: e.target.value})}
-                          className="resize-none"
+                          className=""
                         />
                       </div>
                       <div className="grid gap-2">
@@ -528,7 +604,7 @@ export function ClientSignUpForm({
                           required={!!services.ios}
                           value={iosDetails.credentials}
                           onChange={(e) => setIosDetails({...iosDetails, credentials: e.target.value})}
-                          className="resize-none"
+                          className=""
                         />
                       </div>
                     </div>
@@ -556,7 +632,7 @@ export function ClientSignUpForm({
                 Provide the name, email, and role for each user who needs access. These will be sent for approval to the super admin.
               </p>
               
-              <div className="space-y-3 max-h-96 overflow-y-auto">
+              <div className="space-y-3 max-h-auto overflow-y-visible">
                 {userAccesses.map((user, index) => (
                   <div key={index} className="p-4 border rounded-lg space-y-3 relative">
                     <div className="flex items-center justify-between mb-2">
@@ -617,27 +693,90 @@ export function ClientSignUpForm({
               </div>
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="password">Password for all accounts *</Label>
-              <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-              <p className="text-xs text-gray-500">
-                This password will be used for all approved email accounts.
+            <div className="space-y-4 pt-6 border-t-2">
+              <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Account Security</h3>
+              
+              <div className="grid gap-2">
+                <Label htmlFor="password" className="text-sm font-medium text-gray-700">Password for all accounts *</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <Input 
+                    id="password" 
+                    type="password" 
+                    required 
+                    value={password} 
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-10 h-12 border-gray-300 focus:border-purple-500 focus:ring-purple-500"
+                    placeholder="••••••••"
+                  />
+                </div>
+                <p className="text-xs text-gray-600 flex items-start gap-2">
+                  <CheckCircle className={`h-4 w-4 mt-0.5 ${password.length >= 6 ? 'text-green-500' : 'text-gray-400'}`} />
+                  This password will be used for all approved email accounts (minimum 6 characters).
+                </p>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="password-confirm" className="text-sm font-medium text-gray-700">Confirm Password *</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <Input 
+                    id="password-confirm" 
+                    type="password" 
+                    required 
+                    value={passwordConfirm} 
+                    onChange={(e) => setPasswordConfirm(e.target.value)}
+                    className="pl-10 h-12 border-gray-300 focus:border-purple-500 focus:ring-purple-500"
+                    placeholder="••••••••"
+                  />
+                </div>
+                {passwordConfirm && (
+                  <p className="text-xs flex items-center gap-2">
+                    <CheckCircle className={`h-4 w-4 ${password === passwordConfirm ? 'text-green-500' : 'text-red-500'}`} />
+                    <span className={password === passwordConfirm ? 'text-green-600' : 'text-red-600'}>
+                      {password === passwordConfirm ? 'Passwords match' : 'Passwords do not match'}
+                    </span>
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p className="text-sm text-red-600 font-medium">{error}</p>
+              </div>
+            )}
+
+            <Button 
+              type="submit" 
+              className="w-full h-12 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-medium shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-base" 
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <div className="flex items-center gap-2">
+                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Registering Organization...
+                </div>
+              ) : (
+                "Register Organization"
+              )}
+            </Button>
+
+            <div className="text-center pt-4 border-t">
+              <p className="text-sm text-gray-600">
+                Already have an account?{" "}
+                <Link href="/auth/login" className="text-purple-600 hover:text-purple-700 font-medium transition-colors">
+                  Sign in
+                </Link>
               </p>
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="password-confirm">Confirm Password *</Label>
-              <Input id="password-confirm" type="password" required value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)} />
-            </div>
-
-            {error && <p className="text-sm text-red-500">{error}</p>}
-
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Registering..." : "Register organisation"}
-            </Button>
-
-            <div className="mt-4 text-center text-sm">
-              Already have an account? <Link href="/auth/login" className="underline">Login</Link>
+            <div className="flex items-center justify-center gap-2 text-xs text-gray-500 mt-2">
+              <Lock className="h-3.5 w-3.5" />
+              <span>Your data is encrypted and secure</span>
             </div>
           </form>
         </CardContent>

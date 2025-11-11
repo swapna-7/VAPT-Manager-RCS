@@ -29,6 +29,13 @@ interface Vulnerability {
   organization_id: string;
   assigned_to_client: string | null;
   submitted_by: string;
+  service_type: string | null;
+  poc: string | null;
+  instances: string | null;
+  cwe_id: string | null;
+  security_team_comments: string | null;
+  client_status: string | null;
+  client_deadline: string | null;
   organizations: {
     name: string;
     contact_email: string | null;
@@ -36,6 +43,9 @@ interface Vulnerability {
   profiles: {
     full_name: string | null;
   };
+  assigned_client_profile?: {
+    full_name: string | null;
+  } | null;
 }
 
 interface ClientUser {
@@ -112,11 +122,23 @@ export default function AdminVulnerabilityDetailPage({ params }: { params: Promi
         return;
       }
 
+      // Fetch assigned client details if assigned
+      let assignedClientData = null;
+      if (vuln.assigned_to_client) {
+        const { data: client } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", vuln.assigned_to_client)
+          .single();
+        assignedClientData = client;
+      }
+
       // Transform the data
       const transformedVuln = {
         ...vuln,
         organizations: Array.isArray(vuln.organizations) ? vuln.organizations[0] : vuln.organizations,
-        profiles: Array.isArray(vuln.profiles) ? vuln.profiles[0] : vuln.profiles
+        profiles: Array.isArray(vuln.profiles) ? vuln.profiles[0] : vuln.profiles,
+        assigned_client_profile: assignedClientData
       };
 
       setVulnerability(transformedVuln);
@@ -424,14 +446,56 @@ export default function AdminVulnerabilityDetailPage({ params }: { params: Promi
       <Card>
         <CardHeader>
           <CardTitle>Vulnerability Information</CardTitle>
+          <CardDescription>Details submitted by security team</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Service Type */}
+          {vulnerability.service_type && (
+            <div>
+              <p className="text-sm font-medium text-gray-600 mb-2">Service Type</p>
+              <Badge variant="outline" className="text-sm">
+                {vulnerability.service_type}
+              </Badge>
+            </div>
+          )}
+
           <div>
             <p className="text-sm font-medium text-gray-600 mb-2">Description</p>
-            <p className="text-gray-900 whitespace-pre-wrap">{vulnerability.description}</p>
+            <div className="bg-gray-50 p-4 rounded-lg border">
+              <p className="text-gray-900 whitespace-pre-wrap">{vulnerability.description}</p>
+            </div>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          {/* POC */}
+          {vulnerability.poc && (
+            <div>
+              <p className="text-sm font-medium text-gray-600 mb-2">Proof of Concept (POC)</p>
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                <a 
+                  href={vulnerability.poc} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 font-mono text-sm break-all underline"
+                >
+                  {vulnerability.poc}
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* Instances */}
+          {vulnerability.instances && (
+            <div>
+              <p className="text-sm font-medium text-gray-600 mb-2">Instances</p>
+              <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                <pre className="text-gray-900 whitespace-pre-wrap font-mono text-sm">
+                  {vulnerability.instances}
+                </pre>
+              </div>
+            </div>
+          )}
+
+          <div className="grid md:grid-cols-3 gap-6">
             <div>
               <p className="text-sm font-medium text-gray-600 mb-2">Severity</p>
               <Badge className={getSeverityColor(vulnerability.severity)}>
@@ -440,21 +504,43 @@ export default function AdminVulnerabilityDetailPage({ params }: { params: Promi
             </div>
             {vulnerability.cvss_score && (
               <div>
-                <p className="text-sm font-medium text-gray-600 mb-2">CVSS Score</p>
+                <p className="text-sm font-medium text-gray-600 mb-2">CVSS Score (v3.1)</p>
                 <p className="text-2xl font-bold text-gray-900">{vulnerability.cvss_score}</p>
+              </div>
+            )}
+            {vulnerability.cwe_id && (
+              <div>
+                <p className="text-sm font-medium text-gray-600 mb-2">CWE ID</p>
+                <Badge variant="outline" className="text-sm font-mono">
+                  {vulnerability.cwe_id}
+                </Badge>
               </div>
             )}
           </div>
 
           <div>
             <p className="text-sm font-medium text-gray-600 mb-2">Affected Systems</p>
-            <p className="text-gray-900 whitespace-pre-wrap">{vulnerability.affected_systems}</p>
+            <div className="bg-gray-50 p-4 rounded-lg border">
+              <p className="text-gray-900 whitespace-pre-wrap">{vulnerability.affected_systems}</p>
+            </div>
           </div>
 
           <div>
-            <p className="text-sm font-medium text-gray-600 mb-2">Remediation Steps</p>
-            <p className="text-gray-900 whitespace-pre-wrap">{vulnerability.remediation}</p>
+            <p className="text-sm font-medium text-gray-600 mb-2">Countermeasures / Remediation</p>
+            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+              <p className="text-gray-900 whitespace-pre-wrap">{vulnerability.remediation}</p>
+            </div>
           </div>
+
+          {/* Security Team Comments */}
+          {vulnerability.security_team_comments && (
+            <div>
+              <p className="text-sm font-medium text-gray-600 mb-2">Security Team Comments</p>
+              <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                <p className="text-gray-900 whitespace-pre-wrap">{vulnerability.security_team_comments}</p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -543,6 +629,53 @@ export default function AdminVulnerabilityDetailPage({ params }: { params: Promi
           )}
         </CardContent>
       </Card>
+
+      {/* Client Assignment Info */}
+      {vulnerability.assigned_to_client && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Client Assignment
+            </CardTitle>
+            <CardDescription>
+              This vulnerability has been assigned to a client user
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-gray-600">Assigned to</p>
+                <p className="font-semibold text-blue-700">
+                  {vulnerability.assigned_client_profile?.full_name || "Unknown Client"}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Client Status</p>
+                <Badge className={
+                  vulnerability.client_status === "closed" ? "bg-green-100 text-green-800" :
+                  vulnerability.client_status === "reopened" ? "bg-red-100 text-red-800" :
+                  "bg-yellow-100 text-yellow-800"
+                }>
+                  {vulnerability.client_status ? vulnerability.client_status.charAt(0).toUpperCase() + vulnerability.client_status.slice(1) : "Open"}
+                </Badge>
+              </div>
+            </div>
+            {vulnerability.client_deadline && (
+              <div className="pt-3 border-t">
+                <p className="text-sm text-gray-600 flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Remediation Deadline
+                </p>
+                <p className="font-semibold text-gray-900 mt-1">
+                  {new Date(vulnerability.client_deadline).toLocaleDateString()} at{" "}
+                  {new Date(vulnerability.client_deadline).toLocaleTimeString()}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Client Assignment Modal */}
       {showClientModal && (

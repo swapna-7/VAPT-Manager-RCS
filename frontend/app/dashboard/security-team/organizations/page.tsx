@@ -174,17 +174,17 @@ export default async function SecurityTeamOrganizationsPage() {
                       <p className="text-xs text-gray-500 w-full mb-1">Assigned Services:</p>
                       {org.assigned_services.web && (
                         <Badge variant="outline" className="text-xs">
-                          Web ({org.assigned_services.web})
+                          Web ({typeof org.assigned_services.web === 'string' ? org.assigned_services.web : org.assigned_services.web?.tier || 'N/A'})
                         </Badge>
                       )}
                       {org.assigned_services.android && (
                         <Badge variant="outline" className="text-xs">
-                          Android ({org.assigned_services.android})
+                          Android ({typeof org.assigned_services.android === 'string' ? org.assigned_services.android : org.assigned_services.android?.tier || 'N/A'})
                         </Badge>
                       )}
                       {org.assigned_services.ios && (
                         <Badge variant="outline" className="text-xs">
-                          iOS ({org.assigned_services.ios})
+                          iOS ({typeof org.assigned_services.ios === 'string' ? org.assigned_services.ios : org.assigned_services.ios?.tier || 'N/A'})
                         </Badge>
                       )}
                       {!org.assigned_services.web && !org.assigned_services.android && !org.assigned_services.ios && (
