@@ -2,44 +2,82 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { CheckCircle2, UserPlus, Building2, Clock } from "lucide-react";
+import { CheckCircle2, UserPlus, Building2, Clock, Calendar } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
+import { ReactNode } from "react";
 
 interface OrganizationActivityProps {
   organizationId: string;
 }
 
+interface ActivityItem {
+  id: string;
+  created_at: string;
+  type: string;
+  icon: ReactNode;
+  message: string;
+  details?: string;
+}
+
 export default function OrganizationActivity({ organizationId }: OrganizationActivityProps) {
-  const [activities, setActivities] = useState<any[]>([]);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchActivity = async () => {
       const supabase = createClient();
       
-      // Fetch activity logs related to this organization
-      const { data: logs } = await supabase
-        .from("activity_logs")
-        .select("*")
-        .eq("target->>organization_id", organizationId)
-        .order("created_at", { ascending: false })
-        .limit(10);
+      // Fetch organization creation date
+      const { data: organization } = await supabase
+        .from("organizations")
+        .select("name, created_at")
+        .eq("id", organizationId)
+        .single();
 
-      // Also fetch notifications related to this organization
-      const { data: notifications } = await supabase
-        .from("notifications")
-        .select("*")
-        .eq("payload->>organization_id", organizationId)
-        .order("created_at", { ascending: false })
-        .limit(10);
+      // Fetch all users that belong to this organization
+      const { data: users } = await supabase
+        .from("profiles")
+        .select("id, full_name, role, created_at, status")
+        .eq("organization_id", organizationId)
+        .order("created_at", { ascending: true });
 
-      // Combine and sort
-      const allActivities = [
-        ...(logs || []).map((log) => ({ ...log, type: "activity" })),
-        ...(notifications || []).map((notif) => ({ ...notif, type: "notification" })),
-      ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      // Get user emails
+      const { data: { users: authUsers } } = await supabase.auth.admin.listUsers();
+      const emailMap = new Map(authUsers?.map(u => [u.id, u.email]) || []);
 
-      setActivities(allActivities.slice(0, 10));
+      const activityList: ActivityItem[] = [];
+
+      // Add organization creation
+      if (organization) {
+        activityList.push({
+          id: `org-created-${organizationId}`,
+          created_at: organization.created_at,
+          type: "organization_created",
+          icon: <Building2 className="h-4 w-4 text-purple-600" />,
+          message: "Organization Created",
+          details: organization.name,
+        });
+      }
+
+      // Add user onboarding events
+      if (users) {
+        users.forEach(user => {
+          const email = emailMap.get(user.id);
+          activityList.push({
+            id: `user-onboard-${user.id}`,
+            created_at: user.created_at,
+            type: "user_onboarded",
+            icon: <UserPlus className="h-4 w-4 text-green-600" />,
+            message: "User Onboarded",
+            details: `${user.full_name || "Unknown"}${email ? ` (${email})` : ""} - ${user.role}`,
+          });
+        });
+      }
+
+      // Sort by date (most recent first)
+      activityList.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      setActivities(activityList);
       setLoading(false);
     };
 
@@ -47,43 +85,50 @@ export default function OrganizationActivity({ organizationId }: OrganizationAct
   }, [organizationId]);
 
   if (loading) {
-    return <p className="text-sm text-gray-500">Loading activity...</p>;
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+      </div>
+    );
   }
 
   if (activities.length === 0) {
-    return <p className="text-sm text-gray-500">No activity recorded</p>;
+    return (
+      <div className="text-center py-8">
+        <Calendar className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+        <p className="text-sm text-gray-500">No activity recorded</p>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-4">
-      {activities.map((activity) => {
-        let icon = <Clock className="h-4 w-4 text-blue-500" />;
-        let message = "";
-
-        if (activity.type === "notification") {
-          if (activity.notification_type === "organization_signup") {
-            icon = <Building2 className="h-4 w-4 text-blue-500" />;
-            message = "Organization registered";
-          } else if (activity.notification_type === "user_approved") {
-            icon = <CheckCircle2 className="h-4 w-4 text-green-500" />;
-            message = "User approved";
-          }
-        } else {
-          message = activity.action || "Activity recorded";
-        }
-
-        return (
-          <div key={activity.id} className="flex items-start gap-3 pb-3 border-b last:border-0">
-            {icon}
-            <div className="flex-1">
-              <p className="text-sm text-gray-900">{message}</p>
-              <p className="text-xs text-gray-500">
-                {formatDateTime(activity.created_at)}
-              </p>
+    <div className="space-y-4 max-h-96 overflow-y-auto">
+      {activities.map((activity) => (
+        <div key={activity.id} className="flex items-start gap-3 pb-4 border-b last:border-0">
+          <div className="flex-shrink-0 mt-1">
+            {activity.icon}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-gray-900">{activity.message}</p>
+                {activity.details && (
+                  <p className="text-sm text-gray-700 mt-1">{activity.details}</p>
+                )}
+              </div>
+            </div>
+            <div className="mt-2 pt-2 border-t border-gray-100">
+              <div className="flex items-center gap-1">
+                <Clock className="h-3 w-3 text-gray-400" />
+                <p className="text-xs font-medium text-gray-500">When:</p>
+                <p className="text-xs text-gray-600">
+                  {formatDateTime(activity.created_at)}
+                </p>
+              </div>
             </div>
           </div>
-        );
-      })}
+        </div>
+      ))}
     </div>
   );
 }

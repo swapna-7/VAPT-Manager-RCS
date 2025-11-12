@@ -98,6 +98,20 @@ export default async function SecurityTeamMemberDashboard({ params }: PageProps)
     organization = orgData;
   }
 
+  // Fetch assigned organizations with deadlines and services
+  const { data: assignedOrgs } = await supabase
+    .from("security_team_organizations")
+    .select(`
+      deadline,
+      services,
+      organizations!inner (
+        id,
+        name
+      )
+    `)
+    .eq("security_team_user_id", user.id)
+    .order("deadline", { ascending: true, nullsFirst: false });
+
   // Verify the user has Security-team role
   if (profile.role !== "Security-team") {
     return (
@@ -238,54 +252,64 @@ export default async function SecurityTeamMemberDashboard({ params }: PageProps)
           </CardContent>
         </Card>
 
-        {/* Organization Information */}
+        {/* Deadlines */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-purple-600" />
-              Organization Details
+              <Clock className="h-5 w-5 text-purple-600" />
+              Deadlines
             </CardTitle>
+            <CardDescription>
+              Project deadlines for assigned organizations
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {organization ? (
-              <>
-                <div>
-                  <p className="text-sm text-gray-600">Organization Name</p>
-                  <p className="font-semibold text-gray-900">
-                    {organization.name}
-                  </p>
-                </div>
-                {organization.contact_email && (
-                  <div>
-                    <p className="text-sm text-gray-600 flex items-center gap-1">
-                      <Mail className="h-4 w-4" />
-                      Contact Email
-                    </p>
-                    <p className="font-semibold text-gray-900">
-                      {organization.contact_email}
-                    </p>
+          <CardContent className="space-y-3">
+            {assignedOrgs && assignedOrgs.length > 0 ? (
+              assignedOrgs.map((assignment: any, index: number) => {
+                const org = Array.isArray(assignment.organizations) 
+                  ? assignment.organizations[0] 
+                  : assignment.organizations;
+                const services = assignment.services || {};
+                const serviceKeys = Object.keys(services);
+                
+                return (
+                  <div key={index} className="border-l-4 border-purple-500 pl-4 py-2">
+                    {assignment.deadline ? (
+                      <p className="font-semibold text-gray-900 flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-purple-600" />
+                        {new Date(assignment.deadline).toLocaleDateString('en-GB')} - {new Date(assignment.deadline).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    ) : (
+                      <p className="font-semibold text-gray-500 flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-gray-400" />
+                        No deadline set
+                      </p>
+                    )}
+                    <p className="text-sm text-gray-700 mt-1">{org?.name || "Unknown Organization"}</p>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {serviceKeys.map((serviceKey) => {
+                        const serviceName = 
+                          serviceKey === 'web' ? 'Web Application PT' :
+                          serviceKey === 'android' ? 'Android Application PT' :
+                          serviceKey === 'ios' ? 'iOS Application PT' : serviceKey;
+                        
+                        const tier = typeof services[serviceKey] === 'string' 
+                          ? services[serviceKey]
+                          : services[serviceKey]?.tier || 'N/A';
+                        
+                        return (
+                          <Badge key={serviceKey} variant="outline" className="text-xs">
+                            {serviceName} ({tier})
+                          </Badge>
+                        );
+                      })}
+                    </div>
                   </div>
-                )}
-                {organization.contact_phone && (
-                  <div>
-                    <p className="text-sm text-gray-600">Contact Phone</p>
-                    <p className="font-semibold text-gray-900">
-                      {organization.contact_phone}
-                    </p>
-                  </div>
-                )}
-                {organization.address && (
-                  <div>
-                    <p className="text-sm text-gray-600">Address</p>
-                    <p className="font-semibold text-gray-900">
-                      {organization.address}
-                    </p>
-                  </div>
-                )}
-              </>
+                );
+              })
             ) : (
               <div>
-                <p className="text-gray-600">No organization assigned</p>
+                <p className="text-gray-600">No organizations assigned yet</p>
               </div>
             )}
           </CardContent>

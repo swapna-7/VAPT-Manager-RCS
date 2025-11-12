@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { User, Mail, Building2, Calendar, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { User, Mail, Calendar, CheckCircle2, XCircle, Clock, Shield, AlertTriangle } from "lucide-react";
 
 interface PageProps {
   params: Promise<{
@@ -119,6 +119,38 @@ export default async function ClientDashboard({ params }: PageProps) {
     organization = orgData;
   }
 
+  // Fetch vulnerability statistics
+  const { data: vulnerabilities } = await supabase
+    .from("vulnerabilities")
+    .select("id, client_status, verification_status")
+    .eq("assigned_to_client", user.id);
+
+  const stats = {
+    open: vulnerabilities?.filter(v => v.client_status === "open" || v.client_status === "reopened").length || 0,
+    closed: vulnerabilities?.filter(v => v.client_status === "closed").length || 0,
+    sentForVerification: vulnerabilities?.filter(v => 
+      v.client_status === "closed" && 
+      (v.verification_status === "pending_verification" || v.verification_status === "assigned")
+    ).length || 0,
+    verified: vulnerabilities?.filter(v => v.verification_status === "verified").length || 0,
+    rejected: vulnerabilities?.filter(v => v.verification_status === "verification_rejected").length || 0,
+  };
+
+  // Fetch deadlines from vulnerabilities
+  const { data: deadlineVulns } = await supabase
+    .from("vulnerabilities")
+    .select(`
+      client_deadline,
+      title,
+      service_type,
+      organizations!inner (
+        name
+      )
+    `)
+    .eq("assigned_to_client", user.id)
+    .not("client_deadline", "is", null)
+    .order("client_deadline", { ascending: true });
+
   // Check if account is suspended
   if (profile.suspended) {
     return (
@@ -231,141 +263,116 @@ export default async function ClientDashboard({ params }: PageProps) {
           </CardContent>
         </Card>
 
+        {/* Deadlines */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-blue-600" />
-              Organization Details
+              <Clock className="h-5 w-5 text-blue-600" />
+              Deadlines
             </CardTitle>
+            <CardDescription>
+              Remediation deadlines for vulnerabilities
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {organization ? (
-              <>
-                <div>
-                  <p className="text-sm text-gray-600">Organization Name</p>
-                  <p className="font-semibold text-gray-900">
-                    {organization.name}
-                  </p>
-                </div>
-                {organization.contact_email && (
-                  <div>
-                    <p className="text-sm text-gray-600 flex items-center gap-1">
-                      <Mail className="h-4 w-4" />
-                      Contact Email
+          <CardContent className="space-y-3">
+            {deadlineVulns && deadlineVulns.length > 0 ? (
+              deadlineVulns.slice(0, 5).map((vuln: any, index: number) => {
+                const org = Array.isArray(vuln.organizations) 
+                  ? vuln.organizations[0] 
+                  : vuln.organizations;
+                
+                return (
+                  <div key={index} className="border-l-4 border-blue-500 pl-4 py-2">
+                    <p className="font-semibold text-gray-900 flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-blue-600" />
+                      {new Date(vuln.client_deadline).toLocaleDateString('en-GB')} - {new Date(vuln.client_deadline).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                     </p>
-                    <p className="font-semibold text-gray-900">
-                      {organization.contact_email}
-                    </p>
+                    <p className="text-sm text-gray-700 mt-1">{org?.name || "Unknown Organization"}</p>
+                    <p className="text-sm text-gray-600 mt-1">{vuln.title}</p>
+                    {vuln.service_type && (
+                      <Badge variant="outline" className="text-xs mt-2">
+                        {vuln.service_type}
+                      </Badge>
+                    )}
                   </div>
-                )}
-                {organization.contact_phone && (
-                  <div>
-                    <p className="text-sm text-gray-600">Contact Phone</p>
-                    <p className="font-semibold text-gray-900">
-                      {organization.contact_phone}
-                    </p>
-                  </div>
-                )}
-                {organization.address && (
-                  <div>
-                    <p className="text-sm text-gray-600">Address</p>
-                    <p className="font-semibold text-gray-900">
-                      {organization.address}
-                    </p>
-                  </div>
-                )}
-              </>
+                );
+              })
             ) : (
               <div>
-                <p className="text-gray-600">No organization assigned</p>
+                <p className="text-gray-600">No pending deadlines</p>
               </div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      {/* Vulnerability Statistics */}
+      <div className="grid gap-6 md:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Account Status</CardTitle>
+            <CardTitle className="text-sm font-medium">Open</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">{stats.open}</div>
+            <p className="text-xs text-gray-600 mt-1">
+              Vulnerabilities to fix
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Closed</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">Active</div>
+            <div className="text-2xl font-bold text-green-600">{stats.closed}</div>
             <p className="text-xs text-gray-600 mt-1">
-              {profile.suspended ? "Account is suspended" : "Account is active"}
+              Fixed vulnerabilities
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Approval Status</CardTitle>
-            {profile.status === "approved" ? (
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-            ) : (
-              <Clock className="h-4 w-4 text-orange-600" />
-            )}
+            <CardTitle className="text-sm font-medium">Sent for Verification</CardTitle>
+            <Clock className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold capitalize">{profile.status}</div>
+            <div className="text-2xl font-bold text-blue-600">{stats.sentForVerification}</div>
             <p className="text-xs text-gray-600 mt-1">
-              {profile.status === "approved"
-                ? "Full access granted"
-                : "Waiting for administrator approval"}
+              Pending verification
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Client Type</CardTitle>
-            <User className="h-4 w-4 text-blue-600" />
+            <CardTitle className="text-sm font-medium">Verified</CardTitle>
+            <Shield className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{profile.role}</div>
-            <p className="text-xs text-gray-600 mt-1">Standard client account</p>
+            <div className="text-2xl font-bold text-purple-600">{stats.verified}</div>
+            <p className="text-xs text-gray-600 mt-1">
+              Fixes confirmed
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Rejected</CardTitle>
+            <XCircle className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{stats.rejected}</div>
+            <p className="text-xs text-gray-600 mt-1">
+              Verification failed
+            </p>
           </CardContent>
         </Card>
       </div>
-
-      {organization?.services && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Services</CardTitle>
-            <CardDescription>
-              Services available to your organization
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {typeof organization.services === "object" &&
-              Array.isArray(organization.services) ? (
-                organization.services.map((service: string, index: number) => (
-                  <Badge key={index} variant="outline" className="text-sm">
-                    {service}
-                  </Badge>
-                ))
-              ) : (
-                <p className="text-gray-600">No services assigned</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {organization?.notes && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Organization Notes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-gray-700 whitespace-pre-wrap">
-              {organization.notes}
-            </p>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

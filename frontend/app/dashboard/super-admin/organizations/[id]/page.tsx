@@ -1,27 +1,95 @@
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import { use, useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Link from "next/link";
-import { ArrowLeft, Building2, Mail, Phone, MapPin, Calendar, Clock, Users } from "lucide-react";
+import { ArrowLeft, Building2, Mail, Phone, MapPin, Calendar, Clock, Users, Loader2 } from "lucide-react";
 import OrganizationNotes from "@/components/organization-notes";
 import OrganizationActivity from "@/components/organization-activity";
-import { formatDateTime } from "@/lib/utils";
+import OrganizationAssignmentsTab from "@/components/organization-assignments-tab";
+import OrganizationVulnerabilitiesTab from "@/components/organization-vulnerabilities-tab";
 import { Badge } from "@/components/ui/badge";
 
-export default async function OrganizationDetailPage({
+const formatDateTime = (dateString: string) => {
+  if (!dateString) return "N/A";
+  const date = new Date(dateString);
+  return date.toLocaleDateString() + " at " + date.toLocaleTimeString();
+};
+
+export default function OrganizationDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = await params;
-  const supabase = await createClient();
+  const unwrappedParams = use(params);
+  const supabase = createClient();
+  const [loading, setLoading] = useState(true);
+  const [organization, setOrganization] = useState<any>(null);
+  const [userEmails, setUserEmails] = useState<any[]>([]);
 
-  const { data: organization, error } = await supabase
-    .from("organizations")
-    .select("*")
-    .eq("id", id)
-    .single();
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  if (error || !organization) {
+  const loadData = async () => {
+    try {
+      setLoading(true);
+
+      const { data: org, error: orgError } = await supabase
+        .from("organizations")
+        .select("*")
+        .eq("id", unwrappedParams.id)
+        .single();
+
+      if (orgError || !org) {
+        setOrganization(null);
+        setLoading(false);
+        return;
+      }
+
+      setOrganization(org);
+
+      // Fetch users belonging to this organization
+      const { data: usersData } = await supabase
+        .from("profiles")
+        .select("id, full_name, role, designation, status, created_at")
+        .eq("organization_id", unwrappedParams.id)
+        .order("created_at", { ascending: false });
+
+      // Fetch user emails using admin client
+      const { data: { users: authUsers } } = await supabase.auth.admin.listUsers();
+      const emailMap = new Map(authUsers?.map(u => [u.id, u.email]) || []);
+
+      // Map users with their emails
+      const mappedUsers = usersData?.map((user) => ({
+        id: user.id,
+        full_name: user.full_name,
+        email: emailMap.get(user.id) || "Email not available",
+        role: user.role,
+        designation: user.designation || user.role,
+        status: user.status,
+        created_at: user.created_at,
+      })) || [];
+
+      setUserEmails(mappedUsers);
+    } catch (error) {
+      console.error("Error loading data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+      </div>
+    );
+  }
+
+  if (!organization) {
     return (
       <div className="space-y-6">
         <Link
@@ -39,28 +107,6 @@ export default async function OrganizationDetailPage({
       </div>
     );
   }
-
-  // Fetch users belonging to this organization
-  const { data: usersData } = await supabase
-    .from("profiles")
-    .select("id, full_name, role, designation, status, created_at")
-    .eq("organization_id", id)
-    .order("created_at", { ascending: false });
-
-  // Fetch user emails using admin client
-  const { data: { users: authUsers } } = await supabase.auth.admin.listUsers();
-  const emailMap = new Map(authUsers?.map(u => [u.id, u.email]) || []);
-
-  // Map users with their emails
-  const userEmails = usersData?.map((user) => ({
-    id: user.id,
-    full_name: user.full_name,
-    email: emailMap.get(user.id) || "Email not available",
-    role: user.role,
-    designation: user.designation || user.role, // Use designation if available, fallback to role
-    status: user.status,
-    created_at: user.created_at,
-  })) || [];
 
   const services = organization.services as any;
 
@@ -177,7 +223,7 @@ export default async function OrganizationDetailPage({
                 <thead>
                   <tr className="border-b border-gray-200">
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Name</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Email</th>
+                    {/* <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Email</th> */}
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Designation</th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Role</th>
                   </tr>
@@ -195,7 +241,7 @@ export default async function OrganizationDetailPage({
                           )}
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-sm text-gray-600">{user.email}</td>
+                      {/* <td className="py-3 px-4 text-sm text-gray-600">{user.email}</td> */}
                       <td className="py-3 px-4 text-sm text-gray-600">{(user as any).designation}</td>
                       <td className="py-3 px-4">
                         <Badge variant={user.role === 'Client' ? 'default' : user.role === 'Pending' ? 'secondary' : 'secondary'}>
@@ -355,7 +401,7 @@ export default async function OrganizationDetailPage({
             <CardTitle>Notes</CardTitle>
           </CardHeader>
           <CardContent>
-            <OrganizationNotes organizationId={id} initialNotes={organization.notes || ""} />
+            <OrganizationNotes organizationId={unwrappedParams.id} initialNotes={organization.notes || ""} />
           </CardContent>
         </Card>
 
@@ -365,10 +411,31 @@ export default async function OrganizationDetailPage({
             <CardTitle>Organization Activity</CardTitle>
           </CardHeader>
           <CardContent>
-            <OrganizationActivity organizationId={id} />
+            <OrganizationActivity organizationId={unwrappedParams.id} />
           </CardContent>
         </Card>
       </div>
+
+      {/* Tabs Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Organization Management</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="assignments" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="assignments">Assignments</TabsTrigger>
+              <TabsTrigger value="vulnerabilities">Vulnerabilities</TabsTrigger>
+            </TabsList>
+            <TabsContent value="assignments" className="mt-6">
+              <OrganizationAssignmentsTab organizationId={unwrappedParams.id} />
+            </TabsContent>
+            <TabsContent value="vulnerabilities" className="mt-6">
+              <OrganizationVulnerabilitiesTab organizationId={unwrappedParams.id} />
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
     </div>
   );
 }

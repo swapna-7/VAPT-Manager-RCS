@@ -54,21 +54,43 @@ export default async function SecurityTeamOrganizationsPage() {
     console.error("Error fetching assignments:", assignmentsError);
   }
 
-  // Transform the data and include only assigned services
-  const organizations = assignments?.map((assignment: any) => {
+  // Group assignments by organization to combine multiple service assignments
+  const organizationsMap = new Map();
+  
+  assignments?.forEach((assignment: any) => {
     const org = Array.isArray(assignment.organizations) 
       ? assignment.organizations[0] 
       : assignment.organizations;
     
-    // Get assigned services from the assignment
+    if (!org) return;
+    
+    const orgId = org.id;
     const assignedServices = assignment.services || {};
     
-    return {
-      ...org,
-      assigned_at: assignment.assigned_at,
-      assigned_services: assignedServices // Store which services are assigned
-    };
-  }) || [];
+    if (organizationsMap.has(orgId)) {
+      // Merge services if organization already exists
+      const existing = organizationsMap.get(orgId);
+      existing.assigned_services = {
+        ...existing.assigned_services,
+        ...assignedServices
+      };
+      // Keep the earliest assignment date
+      if (new Date(assignment.assigned_at) < new Date(existing.assigned_at)) {
+        existing.assigned_at = assignment.assigned_at;
+      }
+    } else {
+      // Add new organization
+      organizationsMap.set(orgId, {
+        ...org,
+        assigned_at: assignment.assigned_at,
+        assigned_services: assignedServices
+      });
+    }
+  });
+  
+  // Convert map to array and sort by assigned date
+  const organizations = Array.from(organizationsMap.values())
+    .sort((a, b) => new Date(b.assigned_at).getTime() - new Date(a.assigned_at).getTime());
 
   return (
     <div className="space-y-6">
@@ -174,17 +196,23 @@ export default async function SecurityTeamOrganizationsPage() {
                       <p className="text-xs text-gray-500 w-full mb-1">Assigned Services:</p>
                       {org.assigned_services.web && (
                         <Badge variant="outline" className="text-xs">
-                          Web ({typeof org.assigned_services.web === 'string' ? org.assigned_services.web : org.assigned_services.web?.tier || 'N/A'})
+                          Web {typeof org.assigned_services.web === 'object' && org.assigned_services.web.tier 
+                            ? `(${org.assigned_services.web.tier})` 
+                            : ''}
                         </Badge>
                       )}
                       {org.assigned_services.android && (
                         <Badge variant="outline" className="text-xs">
-                          Android ({typeof org.assigned_services.android === 'string' ? org.assigned_services.android : org.assigned_services.android?.tier || 'N/A'})
+                          Android {typeof org.assigned_services.android === 'object' && org.assigned_services.android.tier 
+                            ? `(${org.assigned_services.android.tier})` 
+                            : ''}
                         </Badge>
                       )}
                       {org.assigned_services.ios && (
                         <Badge variant="outline" className="text-xs">
-                          iOS ({typeof org.assigned_services.ios === 'string' ? org.assigned_services.ios : org.assigned_services.ios?.tier || 'N/A'})
+                          iOS {typeof org.assigned_services.ios === 'object' && org.assigned_services.ios.tier 
+                            ? `(${org.assigned_services.ios.tier})` 
+                            : ''}
                         </Badge>
                       )}
                       {!org.assigned_services.web && !org.assigned_services.android && !org.assigned_services.ios && (

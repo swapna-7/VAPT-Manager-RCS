@@ -126,6 +126,6 @@ export default async function ClientDashboard() {
     );
   }
 
-  // Redirect to the user's personalized dashboard
+  // If account is suspended, check was already done above, so now redirect to personalized dashboard
   redirect(`/dashboard/client/${user.id}`);
 }

@@ -37,19 +37,20 @@ export default async function OrganizationDetailPage({ params }: PageProps) {
   }
 
   // Verify this organization is assigned to the user and get assigned services
-  const { data: assignment } = await supabase
+  const { data: assignments } = await supabase
     .from("security_team_organizations")
     .select("id, services")
     .eq("security_team_user_id", user.id)
-    .eq("organization_id", id)
-    .single();
+    .eq("organization_id", id);
 
-  if (!assignment) {
+  if (!assignments || assignments.length === 0) {
     redirect("/dashboard/security-team/organizations");
   }
 
-  // Get the assigned services from the assignment
-  const assignedServices = assignment.services || {};
+  // Merge all assigned services from multiple assignments
+  const assignedServices: any = assignments.reduce((acc, assignment) => {
+    return { ...acc, ...(assignment.services || {}) };
+  }, {});
 
   // Fetch organization details
   const { data: organization, error } = await supabase

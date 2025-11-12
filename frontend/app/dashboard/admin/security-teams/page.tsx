@@ -172,8 +172,8 @@ export default async function SecurityTeamsPage() {
                           </div>
                           {userAssignments.length > 0 && (
                             <div className="flex gap-1 flex-wrap">
-                              {userAssignments.slice(0, 3).map((assignment: any) => (
-                                <Badge key={assignment.organization_id} variant="outline" className="text-xs">
+                              {userAssignments.slice(0, 3).map((assignment: any, idx: number) => (
+                                <Badge key={`${assignment.organization_id}-${idx}`} variant="outline" className="text-xs">
                                   {assignment.organizations?.name}
                                 </Badge>
                               ))}

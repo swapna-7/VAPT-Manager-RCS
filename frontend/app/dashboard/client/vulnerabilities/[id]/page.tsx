@@ -31,6 +31,7 @@ interface Vulnerability {
   instances: string | null;
   cwe_id: string | null;
   security_team_comments: string | null;
+  client_deadline: string | null;
   organizations: {
     name: string;
     contact_email: string | null;
@@ -78,19 +79,10 @@ export default function ClientVulnerabilityDetailPage({ params }: { params: Prom
         return;
       }
 
-      // Fetch vulnerability details
+      // Fetch vulnerability details - step 1: get vulnerability
       const { data: vuln, error } = await supabase
         .from("vulnerabilities")
-        .select(`
-          *,
-          organizations!inner (
-            name,
-            contact_email
-          ),
-          profiles!vulnerabilities_submitted_by_fkey (
-            full_name
-          )
-        `)
+        .select("*")
         .eq("id", unwrappedParams.id)
         .eq("assigned_to_client", user.id)
         .single();
@@ -105,11 +97,25 @@ export default function ClientVulnerabilityDetailPage({ params }: { params: Prom
         return;
       }
 
+      // Step 2: Get organization details
+      const { data: org } = await supabase
+        .from("organizations")
+        .select("name, contact_email")
+        .eq("id", vuln.organization_id)
+        .single();
+
+      // Step 3: Get submitter profile
+      const { data: submitter } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", vuln.submitted_by)
+        .single();
+
       // Transform the data
       const transformedVuln = {
         ...vuln,
-        organizations: Array.isArray(vuln.organizations) ? vuln.organizations[0] : vuln.organizations,
-        profiles: Array.isArray(vuln.profiles) ? vuln.profiles[0] : vuln.profiles
+        organizations: org || { name: "Unknown", contact_email: null },
+        profiles: submitter || { full_name: null }
       };
 
       setVulnerability(transformedVuln);
@@ -164,14 +170,15 @@ export default function ClientVulnerabilityDetailPage({ params }: { params: Prom
   const handleClose = async () => {
     if (!currentUser || !vulnerability) return;
 
-    if (!confirm("Are you sure you want to mark this vulnerability as closed?")) {
+    if (!confirm("Are you sure you want to mark this vulnerability as closed and submit it for verification?")) {
       return;
     }
 
     try {
       setProcessing(true);
 
-      const { error } = await supabase
+      // Step 1: Update vulnerability status to closed
+      const { error: vulnError } = await supabase
         .from("vulnerabilities")
         .update({
           client_status: "closed",
@@ -180,14 +187,31 @@ export default function ClientVulnerabilityDetailPage({ params }: { params: Prom
         })
         .eq("id", unwrappedParams.id);
 
-      if (error) {
-        console.error("Error closing vulnerability:", error);
-        alert("Failed to close: " + error.message);
+      if (vulnError) {
+        console.error("Error closing vulnerability:", vulnError);
+        alert("Failed to close: " + vulnError.message);
         return;
       }
 
-      alert("Vulnerability marked as closed!");
-      router.push("/dashboard/client/vulnerabilities");
+      // Step 2: Create verification request
+      const { error: verificationError } = await supabase
+        .from("verifications")
+        .insert({
+          vulnerability_id: unwrappedParams.id,
+          submitted_by_client: currentUser.id,
+          client_comments: clientComments.trim() || null,
+          verification_status: "pending",
+          submitted_at: new Date().toISOString()
+        });
+
+      if (verificationError) {
+        console.error("Error creating verification:", verificationError);
+        alert("Vulnerability closed but failed to create verification request: " + verificationError.message);
+        return;
+      }
+
+      alert("Vulnerability marked as closed and submitted for verification!");
+      router.push("/dashboard/client/verifications");
     } catch (error) {
       console.error("Error:", error);
       alert("Failed to close vulnerability");
@@ -212,6 +236,7 @@ export default function ClientVulnerabilityDetailPage({ params }: { params: Prom
         return "bg-gray-100 text-gray-800";
     }
   };
+  
 
   const getStatusColor = (status: string | null) => {
     switch (status) {
@@ -243,6 +268,8 @@ export default function ClientVulnerabilityDetailPage({ params }: { params: Prom
   }
 
   const canTakeAction = vulnerability.client_status !== "closed";
+
+
 
   return (
     <div className="space-y-6">
@@ -440,20 +467,7 @@ export default function ClientVulnerabilityDetailPage({ params }: { params: Prom
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-gray-600">Submitted By</p>
-              <p className="font-semibold text-gray-900">
-                {vulnerability.profiles?.full_name || "Unknown"}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Submitted On</p>
-              <p className="font-semibold text-gray-900">
-                {new Date(vulnerability.created_at).toLocaleDateString()}
-              </p>
-            </div>
-          </div>
+          
 
           {vulnerability.approved_at && (
             <div className="grid md:grid-cols-2 gap-4 pt-4 border-t">
@@ -465,6 +479,16 @@ export default function ClientVulnerabilityDetailPage({ params }: { params: Prom
               </div>
             </div>
           )}
+            <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm text-gray-600">Deadline</p>
+              <p className={`font-semibold ${vulnerability.client_deadline ? 'text-red-700' : 'text-gray-900'}`}>
+              {vulnerability.client_deadline 
+                ? `${new Date(vulnerability.client_deadline).toLocaleDateString('en-GB')} - ${new Date(vulnerability.client_deadline).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
+                : "No deadline set"}
+              </p>
+            </div>
+            </div>
 
           {vulnerability.client_updated_at && (
             <div className="pt-4 border-t">

@@ -3,42 +3,43 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { CheckCircle, Send, Clock, XCircle, Shield, Loader2 } from "lucide-react";
-import Link from "next/link";
-
-interface Vulnerability {
-  id: string;
-  title: string;
-  severity: string;
-  client_status: string;
-  verification_status: string | null;
-  created_at: string;
-  organizations: {
-    name: string;
-  };
-}
+import { CheckCircle, Clock, XCircle, FileText, Calendar, Loader2, User, Building2 } from "lucide-react";
 
 interface Verification {
   id: string;
   vulnerability_id: string;
+  submitted_by_client: string;
+  client_comments: string | null;
+  assigned_to_security_team: string | null;
+  verification_deadline: string | null;
   verification_status: string;
-  created_at: string;
-  verified_at: string | null;
   security_team_comments: string | null;
+  admin_comments: string | null;
+  submitted_at: string;
+  assigned_at: string | null;
+  verified_at: string | null;
+  vulnerability: {
+    title: string;
+    severity: string;
+    service_type: string | null;
+    organization_id: string;
+  };
+  organization: {
+    name: string;
+  };
+  security_team_profile?: {
+    full_name: string | null;
+  };
 }
 
 export default function ClientVerificationsPage() {
   const router = useRouter();
   const supabase = createClient();
   const [loading, setLoading] = useState(true);
-  const [vulnerabilities, setVulnerabilities] = useState<any[]>([]);
-  const [verifications, setVerifications] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState("not_submitted");
-  const [submitting, setSubmitting] = useState<string | null>(null);
+  const [verifications, setVerifications] = useState<Verification[]>([]);
 
   useEffect(() => {
     loadData();
@@ -48,13 +49,14 @@ export default function ClientVerificationsPage() {
     try {
       setLoading(true);
 
+      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
-
       if (!user) {
         router.push("/auth/login");
         return;
       }
 
+      // Verify user is client
       const { data: profile } = await supabase
         .from("profiles")
         .select("role")
@@ -66,101 +68,123 @@ export default function ClientVerificationsPage() {
         return;
       }
 
-      // Fetch closed vulnerabilities
-      const { data: vulnsData } = await supabase
-        .from("vulnerabilities")
-        .select(`
-          id,
-          title,
-          severity,
-          client_status,
-          verification_status,
-          created_at,
-          organizations!inner (
-            name
-          )
-        `)
-        .eq("assigned_to_client", user.id)
-        .eq("client_status", "closed")
-        .order("created_at", { ascending: false });
-
-      const transformed = (vulnsData || []).map((item: any) => ({
-        ...item,
-        organizations: Array.isArray(item.organizations) ? item.organizations[0] : item.organizations
-      }));
-
-      setVulnerabilities(transformed);
-
-      // Fetch verifications
-      const { data: verificationsData } = await supabase
+      // Fetch verifications submitted by this client
+      const { data: verificationsData, error } = await supabase
         .from("verifications")
         .select("*")
         .eq("submitted_by_client", user.id)
-        .order("created_at", { ascending: false });
+        .order("submitted_at", { ascending: false });
 
-      setVerifications(verificationsData || []);
+      if (error) {
+        console.error("Error fetching verifications:", error);
+        return;
+      }
+
+      if (!verificationsData || verificationsData.length === 0) {
+        setVerifications([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch vulnerability details for each verification
+      const vulnIds = verificationsData.map(v => v.vulnerability_id);
+      const { data: vulnerabilities } = await supabase
+        .from("vulnerabilities")
+        .select("id, title, severity, service_type, organization_id")
+        .in("id", vulnIds);
+
+      // Fetch organization details
+      const orgIds = vulnerabilities?.map(v => v.organization_id) || [];
+      const { data: organizations } = await supabase
+        .from("organizations")
+        .select("id, name")
+        .in("id", orgIds);
+
+      // Fetch security team profiles
+      const securityTeamIds = verificationsData
+        .map(v => v.assigned_to_security_team)
+        .filter(id => id !== null);
+      
+      const { data: securityTeamProfiles } = securityTeamIds.length > 0
+        ? await supabase
+            .from("profiles")
+            .select("id, full_name")
+            .in("id", securityTeamIds)
+        : { data: [] };
+
+      // Combine all data
+      const enrichedVerifications = verificationsData.map(verification => {
+        const vulnerability = vulnerabilities?.find(v => v.id === verification.vulnerability_id);
+        const organization = organizations?.find(o => o.id === vulnerability?.organization_id);
+        const securityTeamProfile = securityTeamProfiles?.find(p => p.id === verification.assigned_to_security_team);
+
+        return {
+          ...verification,
+          vulnerability: vulnerability || {
+            title: "Unknown",
+            severity: "N/A",
+            service_type: null,
+            organization_id: ""
+          },
+          organization: organization || { name: "Unknown" },
+          security_team_profile: securityTeamProfile || null
+        };
+      });
+
+      setVerifications(enrichedVerifications);
     } catch (error) {
-      console.error("Error:", error);
+      console.error("Error loading data:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSendForVerification = async (vulnerabilityId: string) => {
-    try {
-      setSubmitting(vulnerabilityId);
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) return;
-
-      await supabase.from("verifications").insert({
-        vulnerability_id: vulnerabilityId,
-        submitted_by_client: user.id,
-        verification_status: "pending"
-      });
-
-      await supabase
-        .from("vulnerabilities")
-        .update({ verification_status: "pending_verification" })
-        .eq("id", vulnerabilityId);
-
-      // Reload data
-      await loadData();
-    } catch (error) {
-      console.error("Error:", error);
-      alert("Failed to send for verification");
-    } finally {
-      setSubmitting(null);
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "verified":
+        return "bg-green-100 text-green-800";
+      case "pending":
+        return "bg-yellow-100 text-yellow-800";
+      case "assigned":
+        return "bg-blue-100 text-blue-800";
+      case "rejected":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
     }
   };
 
-  // Create a map of vulnerability_id to verification
-  const verificationMap = new Map(
-    verifications.map((v: any) => [v.vulnerability_id, v])
-  );
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "verified":
+        return <CheckCircle className="h-4 w-4" />;
+      case "pending":
+        return <Clock className="h-4 w-4" />;
+      case "assigned":
+        return <User className="h-4 w-4" />;
+      case "rejected":
+        return <XCircle className="h-4 w-4" />;
+      default:
+        return <FileText className="h-4 w-4" />;
+    }
+  };
 
-  // Calculate counts
-  const notSubmitted = vulnerabilities.filter((v: any) => 
-    !v.verification_status || v.verification_status === "not_submitted"
-  );
-  const pendingCount = vulnerabilities.filter((v: any) => 
-    v.verification_status === "pending_verification"
-  ).length;
-  const verifiedCount = vulnerabilities.filter((v: any) => 
-    v.verification_status === "verified"
-  ).length;
-  const rejectedCount = vulnerabilities.filter((v: any) => 
-    v.verification_status === "verification_rejected"
-  ).length;
-
-  // Filter based on active tab
-  const filteredVulnerabilities = vulnerabilities.filter((v: any) => {
-    if (activeTab === "not_submitted") return !v.verification_status || v.verification_status === "not_submitted";
-    if (activeTab === "pending") return v.verification_status === "pending_verification";
-    if (activeTab === "verified") return v.verification_status === "verified";
-    if (activeTab === "rejected") return v.verification_status === "verification_rejected";
-    return true;
-  });
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case "Critical":
+        return "bg-red-100 text-red-800";
+      case "High":
+        return "bg-orange-100 text-orange-800";
+      case "Medium":
+        return "bg-yellow-100 text-yellow-800";
+      case "Low":
+        return "bg-blue-100 text-blue-800";
+      case "Informational":
+        return "bg-gray-100 text-gray-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
 
   if (loading) {
     return (
@@ -172,259 +196,234 @@ export default function ClientVerificationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Shield className="h-8 w-8 text-blue-600" />
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Verifications</h1>
-          <p className="text-gray-600 mt-1">
-            Submit closed vulnerabilities for verification
-          </p>
-        </div>
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Verification Requests</h1>
+        <p className="text-gray-600 mt-2">
+          Track the verification status of your closed vulnerabilities
+        </p>
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-6 md:grid-cols-4">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Not Submitted</CardTitle>
-            <Send className="h-4 w-4 text-gray-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-600">{notSubmitted.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{pendingCount}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Verified</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{verifiedCount}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Rejected</CardTitle>
-            <XCircle className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{rejectedCount}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Verifications List with Tabs */}
-      <Tabs defaultValue="not_submitted" onValueChange={setActiveTab}>
-        <Card>
-          <CardHeader>
+          <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <CardTitle>Verification Requests</CardTitle>
-              <TabsList>
-                <TabsTrigger value="not_submitted">
-                  Not Submitted ({notSubmitted.length})
-                </TabsTrigger>
-                <TabsTrigger value="pending">
-                  Pending ({pendingCount})
-                </TabsTrigger>
-                <TabsTrigger value="verified">
-                  Verified ({verifiedCount})
-                </TabsTrigger>
-                <TabsTrigger value="rejected">
-                  Rejected ({rejectedCount})
-                </TabsTrigger>
-              </TabsList>
+              <div>
+                <p className="text-sm text-gray-600">Total Submitted</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {verifications.length}
+                </p>
+              </div>
+              <FileText className="h-8 w-8 text-gray-400" />
             </div>
-          </CardHeader>
-          <CardContent>
-            <TabsContent value="not_submitted">
-              <VerificationList 
-                vulnerabilities={filteredVulnerabilities} 
-                verificationMap={verificationMap}
-                onSendForVerification={handleSendForVerification}
-                submitting={submitting}
-                emptyMessage="No vulnerabilities ready for verification submission"
-              />
-            </TabsContent>
-            <TabsContent value="pending">
-              <VerificationList 
-                vulnerabilities={filteredVulnerabilities} 
-                verificationMap={verificationMap}
-                onSendForVerification={handleSendForVerification}
-                submitting={submitting}
-                emptyMessage="No pending verifications"
-              />
-            </TabsContent>
-            <TabsContent value="verified">
-              <VerificationList 
-                vulnerabilities={filteredVulnerabilities} 
-                verificationMap={verificationMap}
-                onSendForVerification={handleSendForVerification}
-                submitting={submitting}
-                emptyMessage="No verified vulnerabilities"
-              />
-            </TabsContent>
-            <TabsContent value="rejected">
-              <VerificationList 
-                vulnerabilities={filteredVulnerabilities} 
-                verificationMap={verificationMap}
-                onSendForVerification={handleSendForVerification}
-                submitting={submitting}
-                emptyMessage="No rejected verifications"
-              />
-            </TabsContent>
           </CardContent>
         </Card>
-      </Tabs>
-    </div>
-  );
-}
 
-// Verification List Component
-function VerificationList({ 
-  vulnerabilities, 
-  verificationMap,
-  onSendForVerification,
-  submitting,
-  emptyMessage
-}: { 
-  vulnerabilities: any[]; 
-  verificationMap: Map<string, any>;
-  onSendForVerification: (id: string) => void;
-  submitting: string | null;
-  emptyMessage: string;
-}) {
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case "Critical": return "bg-red-100 text-red-800";
-      case "High": return "bg-orange-100 text-orange-800";
-      case "Medium": return "bg-yellow-100 text-yellow-800";
-      case "Low": return "bg-blue-100 text-blue-800";
-      case "Informational": return "bg-gray-100 text-gray-800";
-      default: return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const getVerificationColor = (status: string | null) => {
-    switch (status) {
-      case "verified": return "bg-green-100 text-green-800";
-      case "pending_verification": return "bg-yellow-100 text-yellow-800";
-      case "verification_rejected": return "bg-red-100 text-red-800";
-      default: return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const getVerificationIcon = (status: string | null) => {
-    switch (status) {
-      case "verified": return <CheckCircle className="h-4 w-4" />;
-      case "pending_verification": return <Clock className="h-4 w-4" />;
-      case "verification_rejected": return <XCircle className="h-4 w-4" />;
-      default: return <Send className="h-4 w-4" />;
-    }
-  };
-
-  if (vulnerabilities.length === 0) {
-    return (
-      <div className="text-center py-8">
-        <Shield className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-        <p className="text-gray-600">{emptyMessage}</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {vulnerabilities.map((vuln: any) => {
-        const verification = verificationMap.get(vuln.id);
-        const canSubmit = !vuln.verification_status || vuln.verification_status === "not_submitted";
-        
-        return (
-          <div key={vuln.id} className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className="text-lg font-semibold text-gray-900">{vuln.title}</h3>
-                  <Badge className={getSeverityColor(vuln.severity)}>
-                    {vuln.severity}
-                  </Badge>
-                  <Badge className={getVerificationColor(vuln.verification_status)}>
-                    <span className="flex items-center gap-1">
-                      {getVerificationIcon(vuln.verification_status)}
-                      {vuln.verification_status === "verified" ? "Verified" :
-                       vuln.verification_status === "pending_verification" ? "Pending" :
-                       vuln.verification_status === "verification_rejected" ? "Rejected" :
-                       "Not Submitted"}
-                    </span>
-                  </Badge>
-                </div>
-                <p className="text-sm text-gray-600">
-                  Organization: {vuln.organizations.name}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Pending</p>
+                <p className="text-2xl font-bold text-yellow-600">
+                  {verifications.filter(v => v.verification_status === "pending").length}
                 </p>
-                {vuln.verification_status === "verified" && verification?.verified_at && (
-                  <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded">
-                    <p className="text-sm font-semibold text-green-900 mb-1">
-                      ✓ Verified by Security Team
-                    </p>
-                    <p className="text-xs text-green-700">
-                      Verified on: {new Date(verification.verified_at).toLocaleDateString()}
-                    </p>
-                    {verification.security_team_comments && (
-                      <p className="text-sm text-green-900 mt-2">
-                        <strong>Comments:</strong> {verification.security_team_comments}
-                      </p>
-                    )}
-                  </div>
-                )}
-                {vuln.verification_status === "verification_rejected" && verification?.security_team_comments && (
-                  <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded">
-                    <p className="text-sm font-semibold text-red-900 mb-1">
-                      ✗ Verification Rejected
-                    </p>
-                    <p className="text-sm text-red-900 mt-2">
-                      <strong>Reason:</strong> {verification.security_team_comments}
-                    </p>
-                  </div>
-                )}
-                {vuln.verification_status === "pending_verification" && (
-                  <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                    <p className="text-sm text-yellow-900">
-                      <Clock className="h-4 w-4 inline mr-1" />
-                      Awaiting verification from security team
-                    </p>
-                  </div>
-                )}
               </div>
-              {canSubmit && (
-                <Button 
-                  onClick={() => onSendForVerification(vuln.id)}
-                  className="bg-blue-600 hover:bg-blue-700"
-                  disabled={submitting === vuln.id}
-                >
-                  {submitting === vuln.id ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4 mr-2" />
-                      Send for Verification
-                    </>
-                  )}
-                </Button>
-              )}
+              <Clock className="h-8 w-8 text-yellow-400" />
             </div>
-          </div>
-        );
-      })}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Verified</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {verifications.filter(v => v.verification_status === "verified").length}
+                </p>
+              </div>
+              <CheckCircle className="h-8 w-8 text-green-400" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Rejected</p>
+                <p className="text-2xl font-bold text-red-600">
+                  {verifications.filter(v => v.verification_status === "rejected").length}
+                </p>
+              </div>
+              <XCircle className="h-8 w-8 text-red-400" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Verifications List */}
+      {verifications.length === 0 ? (
+        <Card>
+          <CardContent className="pt-6 text-center py-12">
+            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600">No verification requests yet</p>
+            <p className="text-sm text-gray-500 mt-2">
+              Close a vulnerability to submit it for verification
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {verifications.map((verification) => (
+            <Card key={verification.id} className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <CardTitle className="text-lg">
+                        {verification.vulnerability.title}
+                      </CardTitle>
+                      <Badge className={getSeverityColor(verification.vulnerability.severity)}>
+                        {verification.vulnerability.severity}
+                      </Badge>
+                      <Badge className={getStatusColor(verification.verification_status)}>
+                        <span className="flex items-center gap-1">
+                          {getStatusIcon(verification.verification_status)}
+                          {verification.verification_status.charAt(0).toUpperCase() + 
+                           verification.verification_status.slice(1)}
+                        </span>
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-gray-600">
+                      <span className="flex items-center gap-1">
+                        <Building2 className="h-4 w-4" />
+                        {verification.organization.name}
+                      </span>
+                      {verification.vulnerability.service_type && (
+                        <Badge variant="outline" className="text-xs">
+                          {verification.vulnerability.service_type}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+
+              <CardContent className="space-y-4">
+                {/* Timeline */}
+                <div className="grid md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-600 flex items-center gap-1 mb-1">
+                      <Calendar className="h-3 w-3" />
+                      Submitted
+                    </p>
+                    <p className="font-semibold text-gray-900">
+                      {new Date(verification.submitted_at).toLocaleDateString()}
+                    </p>
+                  </div>
+
+                  {verification.assigned_at && (
+                    <div>
+                      <p className="text-gray-600 flex items-center gap-1 mb-1">
+                        <User className="h-3 w-3" />
+                        Assigned
+                      </p>
+                      <p className="font-semibold text-gray-900">
+                        {new Date(verification.assigned_at).toLocaleDateString()}
+                      </p>
+                      {verification.security_team_profile?.full_name && (
+                        <p className="text-xs text-gray-600">
+                          to {verification.security_team_profile.full_name}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {verification.verified_at && (
+                    <div>
+                      <p className="text-gray-600 flex items-center gap-1 mb-1">
+                        <CheckCircle className="h-3 w-3" />
+                        Verified
+                      </p>
+                      <p className="font-semibold text-gray-900">
+                        {new Date(verification.verified_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                  )}
+
+                  {verification.verification_deadline && (
+                    <div>
+                      <p className="text-gray-600 flex items-center gap-1 mb-1">
+                        <Clock className="h-3 w-3" />
+                        Deadline
+                      </p>
+                      <p className={`font-semibold ${
+                        new Date(verification.verification_deadline) < new Date()
+                          ? "text-red-600"
+                          : "text-gray-900"
+                      }`}>
+                        {new Date(verification.verification_deadline).toLocaleDateString()}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Comments */}
+                {verification.client_comments && (
+                  <div className="pt-3 border-t">
+                    <p className="text-xs font-medium text-gray-600 mb-1">Your Comments</p>
+                    <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded border">
+                      {verification.client_comments}
+                    </p>
+                  </div>
+                )}
+
+                {verification.admin_comments && (
+                  <div className="pt-3 border-t">
+                    <p className="text-xs font-medium text-gray-600 mb-1">Admin Comments</p>
+                    <p className="text-sm text-gray-900 bg-blue-50 p-3 rounded border border-blue-200">
+                      {verification.admin_comments}
+                    </p>
+                  </div>
+                )}
+
+                {verification.security_team_comments && (
+                  <div className="pt-3 border-t">
+                    <p className="text-xs font-medium text-gray-600 mb-1">Security Team Comments</p>
+                    <p className="text-sm text-gray-900 bg-purple-50 p-3 rounded border border-purple-200">
+                      {verification.security_team_comments}
+                    </p>
+                  </div>
+                )}
+
+                {/* Status Message */}
+                {verification.verification_status === "rejected" && (
+                  <div className="pt-3 border-t">
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                      <p className="text-sm text-red-800">
+                        <strong>Verification Rejected:</strong> The security team has rejected this verification.
+                        Please review the comments and take necessary action.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {verification.verification_status === "verified" && (
+                  <div className="pt-3 border-t">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <p className="text-sm text-green-800">
+                        <strong>Verified:</strong> The security team has confirmed that this vulnerability has been fixed.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
