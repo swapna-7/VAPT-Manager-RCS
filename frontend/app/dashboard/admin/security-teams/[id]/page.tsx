@@ -306,7 +306,7 @@ export default function SecurityTeamUserPage({ params }: { params: Promise<{ id:
                   setSelectedOrg(e.target.value);
                   setSelectedServices({});
                 }}
-                className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full mt-1 px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                 disabled={assigning || availableOrgs.length === 0}
               >
                 <option value="">Select an organization...</option>
