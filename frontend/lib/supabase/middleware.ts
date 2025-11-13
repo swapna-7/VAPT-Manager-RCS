@@ -44,8 +44,24 @@ export async function updateSession(request: NextRequest) {
 
   // IMPORTANT: If you remove getClaims() and you use server-side rendering
   // with the Supabase client, your users may be randomly logged out.
-  const { data } = await supabase.auth.getClaims();
+  
+  // Try to get the user session and handle errors
+  const { data, error } = await supabase.auth.getClaims();
   const user = data?.claims;
+
+  // If there's an auth error (like invalid refresh token), redirect to login
+  if (error) {
+    console.error('Auth error in middleware:', error.message);
+    if (
+      !request.nextUrl.pathname.startsWith("/auth") &&
+      !request.nextUrl.pathname.startsWith("/login")
+    ) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/login";
+      url.searchParams.set("error", "session_expired");
+      return NextResponse.redirect(url);
+    }
+  }
 
   if (
     request.nextUrl.pathname !== "/" &&

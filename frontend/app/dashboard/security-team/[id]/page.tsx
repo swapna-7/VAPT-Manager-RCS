@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Shield, User, Mail, Building2, Calendar, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { SecurityTeamDeadlines } from "@/components/security-team-deadlines";
 
 interface PageProps {
   params: Promise<{
@@ -97,20 +98,6 @@ export default async function SecurityTeamMemberDashboard({ params }: PageProps)
     
     organization = orgData;
   }
-
-  // Fetch assigned organizations with deadlines and services
-  const { data: assignedOrgs } = await supabase
-    .from("security_team_organizations")
-    .select(`
-      deadline,
-      services,
-      organizations!inner (
-        id,
-        name
-      )
-    `)
-    .eq("security_team_user_id", user.id)
-    .order("deadline", { ascending: true, nullsFirst: false });
 
   // Verify the user has Security-team role
   if (profile.role !== "Security-team") {
@@ -252,68 +239,8 @@ export default async function SecurityTeamMemberDashboard({ params }: PageProps)
           </CardContent>
         </Card>
 
-        {/* Deadlines */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-purple-600" />
-              Deadlines
-            </CardTitle>
-            <CardDescription>
-              Project deadlines for assigned organizations
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {assignedOrgs && assignedOrgs.length > 0 ? (
-              assignedOrgs.map((assignment: any, index: number) => {
-                const org = Array.isArray(assignment.organizations) 
-                  ? assignment.organizations[0] 
-                  : assignment.organizations;
-                const services = assignment.services || {};
-                const serviceKeys = Object.keys(services);
-                
-                return (
-                  <div key={index} className="border-l-4 border-purple-500 pl-4 py-2">
-                    {assignment.deadline ? (
-                      <p className="font-semibold text-gray-900 flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-purple-600" />
-                        {new Date(assignment.deadline).toLocaleDateString('en-GB')} - {new Date(assignment.deadline).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    ) : (
-                      <p className="font-semibold text-gray-500 flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-gray-400" />
-                        No deadline set
-                      </p>
-                    )}
-                    <p className="text-sm text-gray-700 mt-1">{org?.name || "Unknown Organization"}</p>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {serviceKeys.map((serviceKey) => {
-                        const serviceName = 
-                          serviceKey === 'web' ? 'Web Application PT' :
-                          serviceKey === 'android' ? 'Android Application PT' :
-                          serviceKey === 'ios' ? 'iOS Application PT' : serviceKey;
-                        
-                        const tier = typeof services[serviceKey] === 'string' 
-                          ? services[serviceKey]
-                          : services[serviceKey]?.tier || 'N/A';
-                        
-                        return (
-                          <Badge key={serviceKey} variant="outline" className="text-xs">
-                            {serviceName} ({tier})
-                          </Badge>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div>
-                <p className="text-gray-600">No organizations assigned yet</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* Deadlines - Client Component */}
+        <SecurityTeamDeadlines userId={user.id} />
       </div>
 
       {/* Quick Stats */}

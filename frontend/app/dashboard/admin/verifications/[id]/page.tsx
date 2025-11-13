@@ -100,16 +100,23 @@ export default function AdminVerificationDetailPage({ params }: { params: Promis
           client: Array.isArray(vuln.client) ? vuln.client[0] : vuln.client
         });
 
-        // Fetch security team users who originally submitted this vulnerability
-        const { data: securityTeam } = await supabase
+        // Fetch all security team users
+        const { data: allSecurityTeam } = await supabase
           .from("profiles")
           .select("id, full_name")
-          .eq("id", vuln.submitted_by)
-          .single();
+          .eq("role", "Security-team")
+          .eq("status", "approved")
+          .eq("suspended", false)
+          .order("full_name");
 
-        if (securityTeam) {
-          setSecurityTeamUsers([securityTeam]);
-          setSelectedSecurityTeam(securityTeam.id);
+        if (allSecurityTeam && allSecurityTeam.length > 0) {
+          setSecurityTeamUsers(allSecurityTeam);
+          
+          // Pre-select the original submitter if they're in the list
+          const originalSubmitter = allSecurityTeam.find(user => user.id === vuln.submitted_by);
+          if (originalSubmitter) {
+            setSelectedSecurityTeam(originalSubmitter.id);
+          }
         }
       }
     } catch (error) {
@@ -424,7 +431,7 @@ export default function AdminVerificationDetailPage({ params }: { params: Promis
           </CardTitle>
           <CardDescription>
             {isPending 
-              ? "Assign this verification to the original security team member who submitted it"
+              ? "Assign this verification to any security team member for verification"
               : "This verification has been assigned"}
           </CardDescription>
         </CardHeader>
@@ -441,10 +448,14 @@ export default function AdminVerificationDetailPage({ params }: { params: Promis
               <option value="">Select security team member...</option>
               {securityTeamUsers.map((user) => (
                 <option key={user.id} value={user.id}>
-                  {user.full_name || "Unnamed User"} (Original Submitter)
+                  {user.full_name || "Unnamed User"}
+                  {user.id === vulnerability.submitted_by ? " (Original Submitter)" : ""}
                 </option>
               ))}
             </select>
+            {securityTeamUsers.length === 0 && (
+              <p className="text-sm text-red-600">No security team members available</p>
+            )}
           </div>
 
           <div className="space-y-2">
