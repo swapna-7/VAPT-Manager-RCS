@@ -391,7 +391,10 @@ function NotificationCard({
         </div>
         {!notification.read && (
           <Button 
-            onClick={() => onMarkAsRead(notification.id)} 
+            onClick={() => {
+              onMarkAsRead(notification.id);
+              window.location.reload();
+            }} 
             variant="ghost" 
             size="sm"
           >
