@@ -387,15 +387,19 @@ export default function SecurityTeamVerificationDetailPage({ params }: { params:
           {vulnerability.poc && (
             <div>
               <p className="text-sm font-medium text-gray-600 mb-2">Proof of Concept (POC)</p>
-              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                <a 
-                  href={vulnerability.poc} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:text-blue-800 font-mono text-sm break-all underline"
-                >
-                  {vulnerability.poc}
-                </a>
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 space-y-2">
+                {vulnerability.poc.split('\n').filter(link => link.trim()).map((link, index) => (
+                  <div key={index}>
+                    <a 
+                      href={link.trim()} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 font-mono text-sm break-all underline block"
+                    >
+                      {link.trim()}
+                    </a>
+                  </div>
+                ))}
               </div>
             </div>
           )}

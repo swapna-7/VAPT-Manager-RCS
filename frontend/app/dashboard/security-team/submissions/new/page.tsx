@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { FileText, ArrowLeft, Loader2, Send } from "lucide-react";
+import { FileText, ArrowLeft, Loader2, Send, Plus, X } from "lucide-react";
 import Link from "next/link";
 
 interface Organization {
@@ -30,13 +30,13 @@ export default function NewSubmissionPage() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [availableServices, setAvailableServices] = useState<string[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [pocLinks, setPocLinks] = useState<string[]>([""]);
 
   const [formData, setFormData] = useState({
     organization_id: "",
     service_type: "",
     title: "",
     description: "",
-    poc: "",
     instances: "",
     remediation: "",
     cwe_id: "",
@@ -128,6 +128,22 @@ export default function NewSubmissionPage() {
     }
   };
 
+  const addPocLink = () => {
+    setPocLinks([...pocLinks, ""]);
+  };
+
+  const removePocLink = (index: number) => {
+    if (pocLinks.length > 1) {
+      setPocLinks(pocLinks.filter((_, i) => i !== index));
+    }
+  };
+
+  const updatePocLink = (index: number, value: string) => {
+    const newLinks = [...pocLinks];
+    newLinks[index] = value;
+    setPocLinks(newLinks);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -150,8 +166,10 @@ export default function NewSubmissionPage() {
       alert("Please enter a description");
       return;
     }
-    if (!formData.poc.trim()) {
-      alert("Please enter POC (Proof of Concept)");
+    // Validate POC links
+    const validPocLinks = pocLinks.filter(link => link.trim() !== "");
+    if (validPocLinks.length === 0) {
+      alert("Please enter at least one POC link");
       return;
     }
     if (!formData.instances.trim()) {
@@ -170,6 +188,10 @@ export default function NewSubmissionPage() {
     try {
       setSubmitting(true);
 
+      // Filter out empty POC links and join them with newline
+      const validPocLinks = pocLinks.filter(link => link.trim() !== "");
+      const pocText = validPocLinks.join("\n");
+
       const { error } = await supabase
         .from("vulnerabilities")
         .insert({
@@ -178,7 +200,7 @@ export default function NewSubmissionPage() {
           service_type: formData.service_type,
           title: formData.title.trim(),
           description: formData.description.trim(),
-          poc: formData.poc.trim(),
+          poc: pocText,
           instances: formData.instances.trim(),
           severity: formData.severity,
           cvss_score: formData.cvss_score ? parseFloat(formData.cvss_score) : null,
@@ -329,7 +351,7 @@ export default function NewSubmissionPage() {
 
             {/* Title / Finding */}
             <div className="space-y-2">
-              <Label htmlFor="title">Finding *</Label>
+              <Label htmlFor="title">Finding Name *</Label>
               <Input
                 id="title"
                 value={formData.title}
@@ -354,15 +376,45 @@ export default function NewSubmissionPage() {
 
             {/* Proof of Concept (POC) */}
             <div className="space-y-2">
-              <Label htmlFor="poc">Proof of Concept (POC) *</Label>
-              <Input
-                id="poc"
-                type="url"
-                value={formData.poc}
-                onChange={(e) => handleChange("poc", e.target.value)}
-                placeholder="Link to POC demonstration"
-                required
-              />
+              <Label htmlFor="poc">Proof of Concept (POC) Links *</Label>
+              <div className="space-y-3">
+                {pocLinks.map((link, index) => (
+                  <div key={index} className="flex gap-2">
+                    <Input
+                      id={`poc-${index}`}
+                      type="url"
+                      value={link}
+                      onChange={(e) => updatePocLink(index, e.target.value)}
+                      placeholder="https://example.com/poc-link"
+                      className="flex-1"
+                    />
+                    {pocLinks.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => removePocLink(index)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addPocLink}
+                  className="w-full border-dashed border-gray-500 hover:border-gray-400"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  <p className="text-sm ">Add Another POC Link</p>
+                </Button>
+              </div>
+              <p className="text-sm text-gray-500">
+                Add one or more links to POC demonstrations (screenshots, videos, or documentation)
+              </p>
             </div>
 
             {/* Instances */}
