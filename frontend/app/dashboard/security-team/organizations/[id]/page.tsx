@@ -230,17 +230,27 @@ export default async function OrganizationDetailPage({ params }: PageProps) {
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-semibold text-gray-700 mb-1">User Matrix</h4>
-                  <pre className="text-sm text-gray-900 bg-white p-3 rounded border whitespace-pre-wrap">
-                    {services.web.details.userMatrix || 'N/A'}
-                  </pre>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-1">User Matrix File</h4>
+                  <a 
+                    href={services.web.details.userMatrix} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline bg-white p-3 rounded border break-all flex items-center gap-2"
+                  >
+                    <span>📥</span> {services.web.details.userMatrix.split('/').pop() || 'Download File'}
+                  </a>
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-semibold text-gray-700 mb-1">Login Credentials</h4>
-                  <pre className="text-sm text-gray-900 bg-white p-3 rounded border whitespace-pre-wrap">
-                    {services.web.details.credentials || 'N/A'}
-                  </pre>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-1">Login Credentials File</h4>
+                  <a 
+                    href={services.web.details.credentials} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline bg-white p-3 rounded border break-all flex items-center gap-2"
+                  >
+                    <span>📥</span> {services.web.details.credentials.split('/').pop() || 'Download File'}
+                  </a>
                 </div>
               </div>
             </div>
@@ -279,17 +289,27 @@ export default async function OrganizationDetailPage({ params }: PageProps) {
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-semibold text-gray-700 mb-1">User Matrix</h4>
-                  <pre className="text-sm text-gray-900 bg-white p-3 rounded border whitespace-pre-wrap">
-                    {services.android.details.userMatrix || 'N/A'}
-                  </pre>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-1">User Matrix File</h4>
+                  <a 
+                    href={services.android.details.userMatrix} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline bg-white p-3 rounded border break-all flex items-center gap-2"
+                  >
+                    <span>📥</span> {services.android.details.userMatrix.split('/').pop() || 'Download File'}
+                  </a>
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-semibold text-gray-700 mb-1">Login Credentials</h4>
-                  <pre className="text-sm text-gray-900 bg-white p-3 rounded border whitespace-pre-wrap">
-                    {services.android.details.credentials || 'N/A'}
-                  </pre>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-1">Login Credentials File</h4>
+                  <a 
+                    href={services.android.details.credentials} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline bg-white p-3 rounded border break-all flex items-center gap-2"
+                  >
+                    <span>📥</span> {services.android.details.credentials.split('/').pop() || 'Download File'}
+                  </a>
                 </div>
               </div>
             </div>
@@ -335,17 +355,27 @@ export default async function OrganizationDetailPage({ params }: PageProps) {
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-semibold text-gray-700 mb-1">User Matrix</h4>
-                  <pre className="text-sm text-gray-900 bg-white p-3 rounded border whitespace-pre-wrap">
-                    {services.ios.details.userMatrix || 'N/A'}
-                  </pre>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-1">User Matrix File</h4>
+                  <a 
+                    href={services.ios.details.userMatrix} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline bg-white p-3 rounded border break-all flex items-center gap-2"
+                  >
+                    <span>📥</span> {services.ios.details.userMatrix.split('/').pop() || 'Download File'}
+                  </a>
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-semibold text-gray-700 mb-1">Login Credentials</h4>
-                  <pre className="text-sm text-gray-900 bg-white p-3 rounded border whitespace-pre-wrap">
-                    {services.ios.details.credentials || 'N/A'}
-                  </pre>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-1">Login Credentials File</h4>
+                  <a 
+                    href={services.ios.details.credentials} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline bg-white p-3 rounded border break-all flex items-center gap-2"
+                  >
+                    <span>📥</span> {services.ios.details.credentials.split('/').pop() || 'Download File'}
+                  </a>
                 </div>
               </div>
             </div>

@@ -278,14 +278,28 @@ export default function OrganizationDetailPage({
                       )}
                       {services.web.details.userMatrix && (
                         <div>
-                          <span className="font-medium text-gray-700">User Matrix:</span>
-                          <pre className="mt-1 p-2 bg-white rounded text-xs whitespace-pre-wrap border">{services.web.details.userMatrix}</pre>
+                          <span className="font-medium text-gray-700">User Matrix File:</span>
+                          <a 
+                            href={services.web.details.userMatrix} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="mt-1 flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline break-all"
+                          >
+                            <span>📥</span> {services.web.details.userMatrix.split('/').pop() || 'Download'}
+                          </a>
                         </div>
                       )}
                       {services.web.details.credentials && (
                         <div>
-                          <span className="font-medium text-gray-700">Credentials:</span>
-                          <pre className="mt-1 p-2 bg-white rounded text-xs whitespace-pre-wrap border">{services.web.details.credentials}</pre>
+                          <span className="font-medium text-gray-700">Credentials File:</span>
+                          <a 
+                            href={services.web.details.credentials} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="mt-1 flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline break-all"
+                          >
+                            <span>📥</span> {services.web.details.credentials.split('/').pop() || 'Download'}
+                          </a>
                         </div>
                       )}
                     </div>
@@ -318,14 +332,28 @@ export default function OrganizationDetailPage({
                       )}
                       {services.android.details.userMatrix && (
                         <div>
-                          <span className="font-medium text-gray-700">User Matrix:</span>
-                          <pre className="mt-1 p-2 bg-white rounded text-xs whitespace-pre-wrap border">{services.android.details.userMatrix}</pre>
+                          <span className="font-medium text-gray-700">User Matrix File:</span>
+                          <a 
+                            href={services.android.details.userMatrix} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="mt-1 flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline break-all"
+                          >
+                            <span>📥</span> {services.android.details.userMatrix.split('/').pop() || 'Download'}
+                          </a>
                         </div>
                       )}
                       {services.android.details.credentials && (
                         <div>
-                          <span className="font-medium text-gray-700">Credentials:</span>
-                          <pre className="mt-1 p-2 bg-white rounded text-xs whitespace-pre-wrap border">{services.android.details.credentials}</pre>
+                          <span className="font-medium text-gray-700">Credentials File:</span>
+                          <a 
+                            href={services.android.details.credentials} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="mt-1 flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline break-all"
+                          >
+                            <span>📥</span> {services.android.details.credentials.split('/').pop() || 'Download'}
+                          </a>
                         </div>
                       )}
                     </div>
@@ -364,14 +392,28 @@ export default function OrganizationDetailPage({
                       )}
                       {services.ios.details.userMatrix && (
                         <div>
-                          <span className="font-medium text-gray-700">User Matrix:</span>
-                          <pre className="mt-1 p-2 bg-white rounded text-xs whitespace-pre-wrap border">{services.ios.details.userMatrix}</pre>
+                          <span className="font-medium text-gray-700">User Matrix File:</span>
+                          <a 
+                            href={services.ios.details.userMatrix} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="mt-1 flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline break-all"
+                          >
+                            <span>📥</span> {services.ios.details.userMatrix.split('/').pop() || 'Download'}
+                          </a>
                         </div>
                       )}
                       {services.ios.details.credentials && (
                         <div>
-                          <span className="font-medium text-gray-700">Credentials:</span>
-                          <pre className="mt-1 p-2 bg-white rounded text-xs whitespace-pre-wrap border">{services.ios.details.credentials}</pre>
+                          <span className="font-medium text-gray-700">Credentials File:</span>
+                          <a 
+                            href={services.ios.details.credentials} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="mt-1 flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline break-all"
+                          >
+                            <span>📥</span> {services.ios.details.credentials.split('/').pop() || 'Download'}
+                          </a>
                         </div>
                       )}
                     </div>

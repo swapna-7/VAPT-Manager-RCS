@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useRouter } from "next/navigation";
 import { formatDateTime } from "@/lib/utils";
+import { FileDown } from "lucide-react";
 
 interface Notification {
   id: string;
@@ -295,18 +296,30 @@ function NotificationItems({
                                 )}
                                 {payload.services.web.details.userMatrix && (
                                   <div>
-                                    <span className="font-medium">User Matrix:</span>
-                                    <pre className="mt-1 p-1.5 bg-white rounded text-xs whitespace-pre-wrap">
-                                      {payload.services.web.details.userMatrix}
-                                    </pre>
+                                    <span className="font-medium">User Matrix File:</span>
+                                    <a 
+                                      href={payload.services.web.details.userMatrix} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="mt-1 flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline break-all"
+                                    >
+                                      <FileDown className="h-4 w-4 flex-shrink-0" />
+                                      {payload.services.web.details.userMatrix.split('/').pop() || 'Download'}
+                                    </a>
                                   </div>
                                 )}
                                 {payload.services.web.details.credentials && (
                                   <div>
-                                    <span className="font-medium">Credentials:</span>
-                                    <pre className="mt-1 p-1.5 bg-white rounded text-xs whitespace-pre-wrap">
-                                      {payload.services.web.details.credentials}
-                                    </pre>
+                                    <span className="font-medium">Credentials File:</span>
+                                    <a 
+                                      href={payload.services.web.details.credentials} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="mt-1 flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline break-all"
+                                    >
+                                      <FileDown className="h-4 w-4 flex-shrink-0" />
+                                      {payload.services.web.details.credentials.split('/').pop() || 'Download'}
+                                    </a>
                                   </div>
                                 )}
                               </div>
@@ -336,18 +349,30 @@ function NotificationItems({
                                 )}
                                 {payload.services.android.details.userMatrix && (
                                   <div>
-                                    <span className="font-medium">User Matrix:</span>
-                                    <pre className="mt-1 p-1.5 bg-white rounded text-xs whitespace-pre-wrap">
-                                      {payload.services.android.details.userMatrix}
-                                    </pre>
+                                    <span className="font-medium">User Matrix File:</span>
+                                    <a 
+                                      href={payload.services.android.details.userMatrix} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="mt-1 flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline break-all"
+                                    >
+                                      <FileDown className="h-4 w-4 flex-shrink-0" />
+                                      {payload.services.android.details.userMatrix.split('/').pop() || 'Download'}
+                                    </a>
                                   </div>
                                 )}
                                 {payload.services.android.details.credentials && (
                                   <div>
-                                    <span className="font-medium">Credentials:</span>
-                                    <pre className="mt-1 p-1.5 bg-white rounded text-xs whitespace-pre-wrap">
-                                      {payload.services.android.details.credentials}
-                                    </pre>
+                                    <span className="font-medium">Credentials File:</span>
+                                    <a 
+                                      href={payload.services.android.details.credentials} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="mt-1 flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline break-all"
+                                    >
+                                      <FileDown className="h-4 w-4 flex-shrink-0" />
+                                      {payload.services.android.details.credentials.split('/').pop() || 'Download'}
+                                    </a>
                                   </div>
                                 )}
                               </div>
@@ -383,18 +408,30 @@ function NotificationItems({
                                 )}
                                 {payload.services.ios.details.userMatrix && (
                                   <div>
-                                    <span className="font-medium">User Matrix:</span>
-                                    <pre className="mt-1 p-1.5 bg-white rounded text-xs whitespace-pre-wrap">
-                                      {payload.services.ios.details.userMatrix}
-                                    </pre>
+                                    <span className="font-medium">User Matrix File:</span>
+                                    <a 
+                                      href={payload.services.ios.details.userMatrix} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="mt-1 flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline break-all"
+                                    >
+                                      <FileDown className="h-4 w-4 flex-shrink-0" />
+                                      {payload.services.ios.details.userMatrix.split('/').pop() || 'Download'}
+                                    </a>
                                   </div>
                                 )}
                                 {payload.services.ios.details.credentials && (
                                   <div>
-                                    <span className="font-medium">Credentials:</span>
-                                    <pre className="mt-1 p-1.5 bg-white rounded text-xs whitespace-pre-wrap">
-                                      {payload.services.ios.details.credentials}
-                                    </pre>
+                                    <span className="font-medium">Credentials File:</span>
+                                    <a 
+                                      href={payload.services.ios.details.credentials} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="mt-1 flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline break-all"
+                                    >
+                                      <FileDown className="h-4 w-4 flex-shrink-0" />
+                                      {payload.services.ios.details.credentials.split('/').pop() || 'Download'}
+                                    </a>
                                   </div>
                                 )}
                               </div>

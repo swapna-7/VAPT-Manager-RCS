@@ -89,6 +89,14 @@ export function ClientSignUpForm({
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
+  // File objects for upload
+  const [webUserMatrixFile, setWebUserMatrixFile] = useState<File | null>(null);
+  const [webCredentialsFile, setWebCredentialsFile] = useState<File | null>(null);
+  const [androidUserMatrixFile, setAndroidUserMatrixFile] = useState<File | null>(null);
+  const [androidCredentialsFile, setAndroidCredentialsFile] = useState<File | null>(null);
+  const [iosUserMatrixFile, setIosUserMatrixFile] = useState<File | null>(null);
+  const [iosCredentialsFile, setIosCredentialsFile] = useState<File | null>(null);
+
   const toggleService = (key: keyof ServicesState) => {
     setServices((s) => ({ ...s, [key]: s[key] ? null : "Standard" }));
   };
@@ -111,6 +119,31 @@ export function ClientSignUpForm({
     const updated = [...userAccesses];
     updated[index][field] = value;
     setUserAccesses(updated);
+  };
+
+  const uploadFile = async (file: File, orgId: string, category: string): Promise<string> => {
+    const supabase = createClient();
+    const timestamp = Date.now();
+    const filePath = `${orgId}/${category}/${timestamp}_${file.name}`;
+    
+    const { data, error } = await supabase.storage
+      .from('organization-files')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+    
+    if (error) {
+      console.error('File upload error:', error);
+      throw new Error(`Failed to upload ${file.name}: ${error.message}`);
+    }
+    
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from('organization-files')
+      .getPublicUrl(filePath);
+    
+    return urlData.publicUrl;
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -153,98 +186,93 @@ export function ClientSignUpForm({
     const supabase = createClient();
 
     try {
-      // Insert organization (will be pending approval)
-      const { data: orgData, error: orgError } = await supabase
-        .from("organizations")
-        .insert([
-          {
-            name: orgName,
-            contact_email: contactEmail,
-            contact_phone: contactPhone,
-            address,
-            services: {
-              web: services.web ? {
-                tier: services.web,
-                details: webDetails
-              } : null,
-              android: services.android ? {
-                tier: services.android,
-                details: androidDetails
-              } : null,
-              ios: services.ios ? {
-                tier: services.ios,
-                details: iosDetails
-              } : null,
-            },
-          },
-        ])
-        .select("id")
-        .single();
-      if (orgError) throw orgError;
-
-      const organizationId = orgData?.id;
-
-      // Create notifications for admin/super-admin approval
-      const notifications = [
-        {
-          type: "organization_signup",
-          actor_id: null, // No user created yet
-          payload: { 
-            name: orgName, 
-            organization_id: organizationId,
-            contact_email: contactEmail,
-            contact_phone: contactPhone,
-            address,
-            services: {
-              web: services.web ? {
-                tier: services.web,
-                details: webDetails
-              } : null,
-              android: services.android ? {
-                tier: services.android,
-                details: androidDetails
-              } : null,
-              ios: services.ios ? {
-                tier: services.ios,
-                details: iosDetails
-              } : null,
-            }
-          },
-        },
-        {
-          type: "email_access_request",
-          actor_id: null,
-          payload: {
-            organization_id: organizationId,
-            users: validUsers, // Includes name, email, and role
-            password: password,
-            requested_by: contactEmail,
-            services: {
-              web: services.web ? {
-                tier: services.web,
-                details: webDetails
-              } : null,
-              android: services.android ? {
-                tier: services.android,
-                details: androidDetails
-              } : null,
-              ios: services.ios ? {
-                tier: services.ios,
-                details: iosDetails
-              } : null,
-            }
-          } as any,
-        },
-      ];
+      // Create a temporary org ID for file uploads
+      const tempOrgId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      const { error: notifError } = await supabase.from("notifications").insert(notifications);
-      if (notifError) {
-        console.error("notification insert error", notifError.message);
-        throw new Error("Failed to create approval requests");
+      // Create copies of details to update with URLs
+      const updatedWebDetails = { ...webDetails };
+      const updatedAndroidDetails = { ...androidDetails };
+      const updatedIosDetails = { ...iosDetails };
+      
+      // Upload files and get URLs
+      try {
+        if (webUserMatrixFile) {
+          console.log('Uploading web user matrix...');
+          const url = await uploadFile(webUserMatrixFile, tempOrgId, 'web-user-matrix');
+          console.log('Web user matrix uploaded:', url);
+          updatedWebDetails.userMatrix = url;
+        }
+        if (webCredentialsFile) {
+          console.log('Uploading web credentials...');
+          const url = await uploadFile(webCredentialsFile, tempOrgId, 'web-credentials');
+          console.log('Web credentials uploaded:', url);
+          updatedWebDetails.credentials = url;
+        }
+        if (androidUserMatrixFile) {
+          console.log('Uploading android user matrix...');
+          const url = await uploadFile(androidUserMatrixFile, tempOrgId, 'android-user-matrix');
+          console.log('Android user matrix uploaded:', url);
+          updatedAndroidDetails.userMatrix = url;
+        }
+        if (androidCredentialsFile) {
+          console.log('Uploading android credentials...');
+          const url = await uploadFile(androidCredentialsFile, tempOrgId, 'android-credentials');
+          console.log('Android credentials uploaded:', url);
+          updatedAndroidDetails.credentials = url;
+        }
+        if (iosUserMatrixFile) {
+          console.log('Uploading ios user matrix...');
+          const url = await uploadFile(iosUserMatrixFile, tempOrgId, 'ios-user-matrix');
+          console.log('iOS user matrix uploaded:', url);
+          updatedIosDetails.userMatrix = url;
+        }
+        if (iosCredentialsFile) {
+          console.log('Uploading ios credentials...');
+          const url = await uploadFile(iosCredentialsFile, tempOrgId, 'ios-credentials');
+          console.log('iOS credentials uploaded:', url);
+          updatedIosDetails.credentials = url;
+        }
+      } catch (uploadError) {
+        console.error('Upload error:', uploadError);
+        setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload files');
+        setIsLoading(false);
+        return;
+      }
+
+      // Send organization payload to server to create org & notifications
+      const payload = {
+        name: orgName,
+        contact_email: contactEmail,
+        contact_phone: contactPhone,
+        address,
+        services: {
+          web: services.web
+            ? { tier: services.web, details: updatedWebDetails }
+            : null,
+          android: services.android
+            ? { tier: services.android, details: updatedAndroidDetails }
+            : null,
+          ios: services.ios
+            ? { tier: services.ios, details: updatedIosDetails }
+            : null,
+        },
+        users: validUsers,
+        password,
+      };
+
+      const resp = await fetch('/api/org-create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        throw new Error(body?.error || 'Failed to create organization');
       }
 
       // Redirect to signup success
-      router.push("/auth/sign-up-success");
+      router.push('/auth/sign-up-success');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -395,29 +423,41 @@ export function ClientSignUpForm({
                       </div>
                       <div className="grid gap-2">
                         <Label htmlFor="web-user-matrix" className="text-sm font-medium">User Matrix *</Label>
-                        <Textarea
+                        <Input
                           id="web-user-matrix"
-                          placeholder="List all users with their privileges/access to functions&#10;Example:&#10;Admin User: Full access to all modules&#10;Standard User: Read-only access&#10;Guest User: Limited dashboard view"
-                          rows={4}
+                          type="file"
+                          accept=".csv,.pdf,.doc,.docx,.xls,.xlsx"
                           required={!!services.web}
-                          value={webDetails.userMatrix}
-                          onChange={(e) => setWebDetails({...webDetails, userMatrix: e.target.value})}
-                          className=""
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setWebUserMatrixFile(file);
+                              setWebDetails({...webDetails, userMatrix: file.name});
+                            }
+                          }}
+                          className="cursor-pointer"
                         />
-                        <p className="text-xs text-gray-600">Describe all user roles and their access levels</p>
+                        {webUserMatrixFile && <p className="text-xs text-green-600">✓ {webUserMatrixFile.name}</p>}
+                        <p className="text-xs text-gray-600">Upload file with all user roles and their access levels (CSV, PDF, Word, Excel)</p>
                       </div>
                       <div className="grid gap-2">
                         <Label htmlFor="web-credentials" className="text-sm font-medium">All User Level Login Credentials *</Label>
-                        <Textarea
+                        <Input
                           id="web-credentials"
-                          placeholder="Provide credentials for all user levels&#10;Example:&#10;Admin: admin@example.com / adminPass123&#10;User: user@example.com / userPass123"
-                          rows={4}
+                          type="file"
+                          accept=".csv,.pdf,.doc,.docx,.xls,.xlsx"
                           required={!!services.web}
-                          value={webDetails.credentials}
-                          onChange={(e) => setWebDetails({...webDetails, credentials: e.target.value})}
-                          className=""
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setWebCredentialsFile(file);
+                              setWebDetails({...webDetails, credentials: file.name});
+                            }
+                          }}
+                          className="cursor-pointer"
                         />
-                        <p className="text-xs text-gray-600">List all test credentials for different user roles</p>
+                        {webCredentialsFile && <p className="text-xs text-green-600">✓ {webCredentialsFile.name}</p>}
+                        <p className="text-xs text-gray-600">Upload file with all test credentials for different user roles (CSV, PDF, Word, Excel)</p>
                       </div>
                     </div>
                   )}
@@ -485,27 +525,41 @@ export function ClientSignUpForm({
                       </div>
                       <div className="grid gap-2">
                         <Label htmlFor="android-user-matrix" className="text-sm font-medium">User Matrix *</Label>
-                        <Textarea
+                        <Input
                           id="android-user-matrix"
-                          placeholder="List all users with their privileges/access to functions"
-                          rows={4}
+                          type="file"
+                          accept=".csv,.pdf,.doc,.docx,.xls,.xlsx"
                           required={!!services.android}
-                          value={androidDetails.userMatrix}
-                          onChange={(e) => setAndroidDetails({...androidDetails, userMatrix: e.target.value})}
-                          className=""
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setAndroidUserMatrixFile(file);
+                              setAndroidDetails({...androidDetails, userMatrix: file.name});
+                            }
+                          }}
+                          className="cursor-pointer"
                         />
+                        {androidUserMatrixFile && <p className="text-xs text-green-600">✓ {androidUserMatrixFile.name}</p>}
+                        <p className="text-xs text-gray-600">Upload file with all user roles and their access levels (CSV, PDF, Word, Excel)</p>
                       </div>
                       <div className="grid gap-2">
                         <Label htmlFor="android-credentials" className="text-sm font-medium">All User Level Login Credentials *</Label>
-                        <Textarea
+                        <Input
                           id="android-credentials"
-                          placeholder="Provide credentials for all user levels"
-                          rows={4}
+                          type="file"
+                          accept=".csv,.pdf,.doc,.docx,.xls,.xlsx"
                           required={!!services.android}
-                          value={androidDetails.credentials}
-                          onChange={(e) => setAndroidDetails({...androidDetails, credentials: e.target.value})}
-                          className=""
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setAndroidCredentialsFile(file);
+                              setAndroidDetails({...androidDetails, credentials: file.name});
+                            }
+                          }}
+                          className="cursor-pointer"
                         />
+                        {androidCredentialsFile && <p className="text-xs text-green-600">✓ {androidCredentialsFile.name}</p>}
+                        <p className="text-xs text-gray-600">Upload file with all test credentials for different user roles (CSV, PDF, Word, Excel)</p>
                       </div>
                     </div>
                   )}
@@ -585,27 +639,41 @@ export function ClientSignUpForm({
                       </div>
                       <div className="grid gap-2">
                         <Label htmlFor="ios-user-matrix" className="text-sm font-medium">User Matrix *</Label>
-                        <Textarea
+                        <Input
                           id="ios-user-matrix"
-                          placeholder="List all users with their privileges/access to functions"
-                          rows={4}
+                          type="file"
+                          accept=".csv,.pdf,.doc,.docx,.xls,.xlsx"
                           required={!!services.ios}
-                          value={iosDetails.userMatrix}
-                          onChange={(e) => setIosDetails({...iosDetails, userMatrix: e.target.value})}
-                          className=""
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setIosUserMatrixFile(file);
+                              setIosDetails({...iosDetails, userMatrix: file.name});
+                            }
+                          }}
+                          className="cursor-pointer"
                         />
+                        {iosUserMatrixFile && <p className="text-xs text-green-600">✓ {iosUserMatrixFile.name}</p>}
+                        <p className="text-xs text-gray-600">Upload file with all user roles and their access levels (CSV, PDF, Word, Excel)</p>
                       </div>
                       <div className="grid gap-2">
                         <Label htmlFor="ios-credentials" className="text-sm font-medium">All User Level Login Credentials *</Label>
-                        <Textarea
+                        <Input
                           id="ios-credentials"
-                          placeholder="Provide credentials for all user levels"
-                          rows={4}
+                          type="file"
+                          accept=".csv,.pdf,.doc,.docx,.xls,.xlsx"
                           required={!!services.ios}
-                          value={iosDetails.credentials}
-                          onChange={(e) => setIosDetails({...iosDetails, credentials: e.target.value})}
-                          className=""
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setIosCredentialsFile(file);
+                              setIosDetails({...iosDetails, credentials: file.name});
+                            }
+                          }}
+                          className="cursor-pointer"
                         />
+                        {iosCredentialsFile && <p className="text-xs text-green-600">✓ {iosCredentialsFile.name}</p>}
+                        <p className="text-xs text-gray-600">Upload file with all test credentials for different user roles (CSV, PDF, Word, Excel)</p>
                       </div>
                     </div>
                   )}
